@@ -1,0 +1,17 @@
+[Unit]
+Description=zigbee2mqtt
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/npm start
+WorkingDirectory=/mnt/data/root/zigbee2mqtt
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+RestartSec=90
+StartLimitInterval=400
+StartLimitBurst=3
+User=root
+
+[Install]
+WantedBy=multi-user.target
