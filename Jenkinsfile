@@ -57,7 +57,7 @@ pipeline {
                     sh 'git config --add remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*" && git fetch --all'
                 }
                 env.PURE_VERSION = sh(returnStdout: true, script: "git describe --tags | sed -e 's/-.*//g'").trim()
-                env.VERSION = env.PURE_VERSION + env.WB_VERSION_SUFFIX
+                env.VERSION = env.PURE_VERSION + (env.WB_VERSION_SUFFIX ?: '')
                 echo "Pure version: $PURE_VERSION"
                 echo "Version with suffix: $VERSION"
             }}}
