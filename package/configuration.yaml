@@ -1,0 +1,10 @@
+homeassistant: false
+permit_join: false
+mqtt:
+  base_topic: zigbee2mqtt
+  server: 'mqtt://localhost'
+serial:
+  port: /dev/ttyMOD3
+advanced:
+  rtscts: false
+  last_seen: epoch
