@@ -23,7 +23,7 @@ fi
 echo "Prepare environment"
 apt-get update
 apt-get install -y nodejs git make g++ gcc ruby ruby-dev rubygems build-essential
-gem install --no-document fpm -v 1.11.0
+gem install --no-document fpm -v 1.12.0
                         
 if [[ -n "$NPM_REGISTRY" ]]; then
     echo "Override NPM registry"
@@ -31,6 +31,7 @@ if [[ -n "$NPM_REGISTRY" ]]; then
 fi
 
 pushd "$PROJECT_SUBDIR" || exit 1
+npm audit fix
 npm ci -d
 npm run build -d || true  # required only for newer zigbee2mqtt to compile typescript
 popd || exit 1
@@ -47,7 +48,7 @@ fpm -s dir -t deb -n "$PKG_NAME" \
     --description 'Zigbee to MQTT bridge (package by Wiren Board team)' \
     --url 'https://www.zigbee2mqtt.io/' \
     --vendor 'Wiren Board' \
-    -d 'nodejs (>= 12.18.4)' \
+    -d 'nodejs (>= 16.18.0)' \
     --before-upgrade package/before-upgrade.sh \
     --after-upgrade package/after-upgrade.sh \
     -p "$RESULT_SUBDIR/${PKG_NAME}_${VERSION}_armhf.deb" \

@@ -65,7 +65,7 @@ pipeline {
         stage('Build') {
             environment {
                 WBDEV_BUILD_METHOD="qemuchroot"
-                WBDEV_TARGET="stretch-armhf"
+                WBDEV_TARGET="bullseye-armhf"
             }
             steps { script {
                 def name = params.VERSION_TO_NAME ? "zigbee2mqtt-${PURE_VERSION}" : "zigbee2mqtt";
