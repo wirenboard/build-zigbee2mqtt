@@ -23,7 +23,7 @@ fi
 echo "Prepare environment"
 apt-get update
 apt-get install -y nodejs git make g++ gcc ruby ruby-dev rubygems build-essential
-gem install --no-document fpm -v 1.12.0
+gem install --no-document fpm -v 1.14.2
                         
 if [[ -n "$NPM_REGISTRY" ]]; then
     echo "Override NPM registry"
@@ -31,10 +31,33 @@ if [[ -n "$NPM_REGISTRY" ]]; then
 fi
 
 pushd "$PROJECT_SUBDIR" || exit 1
-npm audit fix
-npm ci -d
-npm run build -d || true  # required only for newer zigbee2mqtt to compile typescript
-popd || exit 1
+
+npm_build() {
+    npm audit fix && \
+    npm ci -d && \
+    npm run build -d  # required only for newer zigbee2mqtt to compile typescript
+}
+
+BUILD_DONE=false
+for i in {1..5}; do
+    if npm_build; then
+        echo "Build done from $i tries!"
+        BUILD_DONE=true
+        break
+    else
+        echo "Build FAILED, retry ($i done)"
+    fi
+done
+
+if ! $BUILD_DONE; then
+    echo "Build FAILED!"
+    exit 1
+fi
+
+popd || {
+    echo "Failed to pop dir"
+    exit 1
+}
 
 mkdir -p "$RESULT_SUBDIR"
 
