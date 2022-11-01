@@ -13,6 +13,7 @@ pipeline {
         booleanParam(name: 'FORCE_OVERWRITE', defaultValue: false,
                 description: 'use only you know what you are doing, replace existing version of package')
         booleanParam(name: 'ADD_VERSION_SUFFIX', defaultValue: true, description: 'for dev branches only')
+        string(name: 'WB_REVISION', defaultValue: '', description: 'for rebuilds, like -wb101')
         string(name: 'WBDEV_IMAGE', defaultValue: 'contactless/devenv:latest',
                 description: 'docker image to use as devenv')
         string(name: 'NPM_REGISTRY', defaultValue: '',
@@ -57,7 +58,7 @@ pipeline {
                     sh 'git config --add remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*" && git fetch --all'
                 }
                 env.PURE_VERSION = sh(returnStdout: true, script: "git describe --tags | sed -e 's/-.*//g'").trim()
-                env.VERSION = env.PURE_VERSION + (env.WB_VERSION_SUFFIX ?: '')
+                env.VERSION = env.PURE_VERSION + params.WB_REVISION + (env.WB_VERSION_SUFFIX ?: '')
                 echo "Pure version: $PURE_VERSION"
                 echo "Version with suffix: $VERSION"
             }}}
