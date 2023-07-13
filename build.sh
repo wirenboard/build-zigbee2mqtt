@@ -33,7 +33,6 @@ fi
 pushd "$PROJECT_SUBDIR" || exit 1
 
 npm_build() {
-    npm audit fix && \
     npm ci -d && \
     npm run build -d  # required only for newer zigbee2mqtt to compile typescript
 }
