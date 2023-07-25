@@ -32,9 +32,17 @@ fi
 
 pushd "$PROJECT_SUBDIR" || exit 1
 
+# Include nodejs version 16 to supported engines
+# https://github.com/Koenkk/zigbee2mqtt/pull/7297
+if [[ "${PKG_NAME}" == "zigbee2mqtt-1.18.1" ]]; then
+    sed -i 's#|| ^15#|| ^15 || ^16#' package.json
+fi
+
 npm_build() {
-    npm ci -d && \
-    npm run build -d  # required only for newer zigbee2mqtt to compile typescript
+    npm ci -d
+    if [[ "${PKG_NAME}" == "zigbee2mqtt-1.18.1" ]]; then
+        npm run build -d  # required only for newer zigbee2mqtt to compile typescript
+    fi
 }
 
 BUILD_DONE=false
