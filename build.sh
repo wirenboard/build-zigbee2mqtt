@@ -40,7 +40,7 @@ fi
 
 npm_build() {
     npm ci -d
-    if [[ "${PKG_NAME}" == "zigbee2mqtt-1.18.1" ]]; then
+    if [[ "${PKG_NAME}" != "zigbee2mqtt-1.18.1" ]]; then
         npm run build -d  # required only for newer zigbee2mqtt to compile typescript
     fi
 }
