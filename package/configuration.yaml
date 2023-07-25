@@ -4,7 +4,12 @@ mqtt:
   base_topic: zigbee2mqtt
   server: 'mqtt://localhost'
 serial:
-  port: /dev/ttyMOD3
+  port: /dev/ttyMOD4
 advanced:
   rtscts: false
   last_seen: epoch
+  pan_id: GENERATE
+  network_key: GENERATE
+#frontend:
+#  port: 8081
+#  host: 0.0.0.0

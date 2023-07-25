@@ -24,7 +24,7 @@ echo "Prepare environment"
 apt-get update
 apt-get install -y nodejs git make g++ gcc ruby ruby-dev rubygems build-essential
 gem install --no-document fpm -v 1.14.2
-                        
+
 if [[ -n "$NPM_REGISTRY" ]]; then
     echo "Override NPM registry"
     npm set registry "$NPM_REGISTRY"
@@ -57,6 +57,8 @@ popd || {
     echo "Failed to pop dir"
     exit 1
 }
+
+cp -f package/configuration.yaml $PROJECT_SUBDIR/data/configuration.yaml
 
 mkdir -p "$RESULT_SUBDIR"
 
