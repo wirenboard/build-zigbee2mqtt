@@ -5,7 +5,7 @@ pipeline {
         label 'devenv'
     }
     parameters {
-        string(name: 'REPO', defaultValue: 'https://github.com/koenkk/zigbee2mqtt', description: 'repo to get zigbee2mqtt from')
+        string(name: 'REPO', defaultValue: 'https://github.com/Koenkk/zigbee2mqtt', description: 'repo to get zigbee2mqtt from')
         string(name: 'BRANCH', defaultValue: 'master', description: 'for checkout step')
         string(name: 'TAG', defaultValue: '', description: 'use with VERSION_TO_NAME to build custom version')
         booleanParam(name: 'VERSION_TO_NAME', defaultValue: false, description: 'build package like zigbee2mqtt-1.18.1')
