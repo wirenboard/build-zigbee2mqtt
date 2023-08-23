@@ -75,6 +75,8 @@ fpm -s dir -t deb -n "$PKG_NAME" \
     --config-files mnt/data/root/zigbee2mqtt/data/configuration.yaml \
     --deb-no-default-config-files \
     --deb-systemd package/zigbee2mqtt.service \
+    --deb-systemd-auto-start \
+    --deb-systemd-enable \
     --deb-recommends wb-zigbee2mqtt \
     -m 'Wiren Board Robot <info@wirenboard.com>' \
     --description 'Zigbee to MQTT bridge (package by Wiren Board team)' \
