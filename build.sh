@@ -1,11 +1,15 @@
 #!/bin/bash -xe
 
 NPM_REGISTRY=${NPM_REGISTRY:-}
+FPM_DEPENDS=${FPM_DEPENDS:-"nodejs (>= 16.18.0)"}
+NODEJS_REPO=${NODEJS_REPO:-"deb [signed-by=/usr/share/keyrings/nodesource.gpg] https://deb.nodesource.com/node_16.x bullseye main"}
 
 if [[ $# -lt 4 ]]; then
     echo >&2 "Usage: $0 <pkg_name> <version> <z2m_dir> <result_dir> [optional fpm flags]"
     echo >&2 "Env used:"
+    echo -e >&2 "\tFPM_DEPENDS\tdependencies"
     echo -e >&2 "\tNPM_REGISTRY\tnpm registry address override"
+    echo -e >&2 "\tNODEJS_REPO\tNode.js DEB repository"
     exit 2
 fi
 
@@ -21,8 +25,10 @@ if [[ ! -d "$PROJECT_SUBDIR" ]]; then
 fi
 
 echo "Prepare environment"
+echo "$NODEJS_REPO" > /etc/apt/sources.list.d/nodesource.list
 apt-get update
-apt-get install -y nodejs git make g++ gcc ruby ruby-dev rubygems build-essential
+apt-get install -y git make g++ gcc ruby ruby-dev rubygems build-essential
+apt-get satisfy -y "$FPM_DEPENDS"
 gem install --no-document fpm -v 1.14.2
 
 if [[ -n "$NPM_REGISTRY" ]]; then
@@ -66,11 +72,13 @@ popd || {
     exit 1
 }
 
-cp -f package/configuration.yaml $PROJECT_SUBDIR/data/configuration.yaml
+cp -f package/configuration.yaml "$PROJECT_SUBDIR/data/configuration.yaml"
 
 mkdir -p "$RESULT_SUBDIR"
 
-fpm -s dir -t deb -n "$PKG_NAME" \
+fpm --input-type dir \
+    --output-type deb \
+    --name "$PKG_NAME" \
     --exclude 'mnt/data/root/zigbee2mqtt/.git*' \
     --config-files mnt/data/root/zigbee2mqtt/data/configuration.yaml \
     --deb-no-default-config-files \
@@ -78,14 +86,14 @@ fpm -s dir -t deb -n "$PKG_NAME" \
     --deb-systemd-auto-start \
     --deb-systemd-enable \
     --deb-recommends wb-zigbee2mqtt \
-    -m 'Wiren Board Robot <info@wirenboard.com>' \
+    --maintainer 'Wiren Board Robot <info@wirenboard.com>' \
     --description 'Zigbee to MQTT bridge (package by Wiren Board team)' \
     --url 'https://www.zigbee2mqtt.io/' \
     --vendor 'Wiren Board' \
-    -d 'nodejs (>= 16.18.0)' \
+    --depends "$FPM_DEPENDS" \
     --before-upgrade package/before-upgrade.sh \
     --after-upgrade package/after-upgrade.sh \
-    -p "$RESULT_SUBDIR/${PKG_NAME}_${VERSION}_armhf.deb" \
-    -v "$VERSION" \
+    --package "$RESULT_SUBDIR/${PKG_NAME}_${VERSION}_${WBDEV_TARGET#*-}.deb" \
+    --version "$VERSION" \
     "$@" \
     "$PROJECT_SUBDIR"=/mnt/data/root

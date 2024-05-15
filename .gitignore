@@ -1,1 +1,2 @@
-*.deb
+result/
+zigbee2mqtt/

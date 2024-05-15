@@ -11,6 +11,6 @@ Using devenv (https://github.com/wirenboard/wirenboard):
 
 ```console
 $ git clone https://github.com/Koenkk/zigbee2mqtt
-$ WBDEV_TARGET=wb6 WBDEV_BUILD_METHOD=qemuchroot wbdev chroot ./build.sh zigbee2mqtt <version> ./zigbee2mqtt ./result
+$ WBDEV_TARGET=bullseye-armhf WBDEV_BUILD_METHOD=qemuchroot wbdev chroot ./build.sh zigbee2mqtt <version> ./zigbee2mqtt ./result
 $ # .deb files are in result/ dir
 ```
