@@ -29,7 +29,7 @@ echo "$NODEJS_REPO" > /etc/apt/sources.list.d/nodesource.list
 cat << EOF > /etc/apt/preferences.d/90nodesource
 Package: *
 Pin: origin deb.nodesource.com
-Pin-Priority: 990
+Pin-Priority: 999
 EOF
 apt-get update
 apt-get install -y git make g++ gcc ruby ruby-dev rubygems build-essential
