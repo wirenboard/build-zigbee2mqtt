@@ -26,6 +26,11 @@ fi
 
 echo "Prepare environment"
 echo "$NODEJS_REPO" > /etc/apt/sources.list.d/nodesource.list
+cat << EOF > /etc/apt/preferences.d/90nodesource
+Package: *
+Pin: origin deb.nodesource.com
+Pin-Priority: 990
+EOF
 apt-get update
 apt-get install -y git make g++ gcc ruby ruby-dev rubygems build-essential
 apt-get satisfy -y "$FPM_DEPENDS"
