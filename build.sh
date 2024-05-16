@@ -79,6 +79,7 @@ mkdir -p "$RESULT_SUBDIR"
 fpm --input-type dir \
     --output-type deb \
     --name "$PKG_NAME" \
+    --version "$VERSION" \
     --exclude 'mnt/data/root/zigbee2mqtt/.git*' \
     --config-files mnt/data/root/zigbee2mqtt/data/configuration.yaml \
     --deb-no-default-config-files \
@@ -93,7 +94,8 @@ fpm --input-type dir \
     --depends "$FPM_DEPENDS" \
     --before-upgrade package/before-upgrade.sh \
     --after-upgrade package/after-upgrade.sh \
-    --package "$RESULT_SUBDIR/${PKG_NAME}_${VERSION}_${WBDEV_TARGET#*-}.deb" \
-    --version "$VERSION" \
+    --package "$RESULT_SUBDIR/result.deb" \
     "$@" \
     "$PROJECT_SUBDIR"=/mnt/data/root
+
+dpkg-name "$RESULT_SUBDIR/result.deb"
