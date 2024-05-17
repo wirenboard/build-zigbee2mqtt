@@ -24,8 +24,6 @@ echo "Prepare environment"
 apt-get update
 apt-get install -y git make g++ gcc ruby ruby-dev rubygems build-essential
 
-whereis npm
-
 if [[ "${PKG_NAME}" == "zigbee2mqtt-1.18.1" ]]; then
 	apt install -y nodejs
 else
@@ -37,6 +35,11 @@ else
 	nodejs20_version=$(apt policy nodejs | grep -v "Candidate:" | grep "1nodesource1" | awk '{print $1}' | grep "^20." | head -n 1)
 	apt install -y nodejs="$nodejs20_version"
 fi
+
+ls -la /usr/lib/node_modules
+ls -la /usr/lib/node_modules/npm/
+ls -la /usr/lib/node_modules/npm/lib
+ls -la /usr/lib/node_modules/npm/lib/es6
 
 gem install --no-document fpm -v 1.14.2
 
