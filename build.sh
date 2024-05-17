@@ -51,11 +51,10 @@ if [[ "${PKG_NAME}" == "zigbee2mqtt-1.18.1" ]]; then
     sed -i 's#|| ^15#|| ^15 || ^16#' package.json
 fi
 
+find / -iname npm
+
 npm_build() {
-    node -v
-    npm -v
-    # npm ci -d
-    npm ci --ignore-scripts
+    npm ci -d
     if [[ "${PKG_NAME}" != "zigbee2mqtt-1.18.1" ]]; then
         npm run build -d  # required only for newer zigbee2mqtt to compile typescript
     fi
