@@ -1,7 +1,5 @@
 #!/bin/bash -xe
 
-whoami
-
 NPM_REGISTRY=${NPM_REGISTRY:-}
 
 if [[ $# -lt 4 ]]; then
@@ -21,8 +19,6 @@ if [[ ! -d "$PROJECT_SUBDIR" ]]; then
     echo "No project subdirectory $PROJECT_SUBDIR"
     exit 2
 fi
-
-ls -laR /usr/lib
 
 echo "Prepare environment"
 apt-get update
