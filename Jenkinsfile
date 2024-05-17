@@ -77,7 +77,7 @@ pipeline {
 
                 sh "printenv | sort"
                 sh "wbdev root printenv | sort"
-                sh "wbdev chroot bash -c 'ls -laR /usr/lib'"
+                sh "wbdev root bash -c 'ls -laR /usr/lib'"
                 sh "wbdev chroot bash -c 'NPM_REGISTRY=${params.NPM_REGISTRY} ./build.sh ${name} ${VERSION} ${PROJECT_SUBDIR} ${RESULT_SUBDIR} ${specialParams}'"
             }}
             post {
