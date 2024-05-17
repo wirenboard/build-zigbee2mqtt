@@ -31,10 +31,9 @@ else
 	# echo "deb [signed-by=/usr/share/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x bullseye main" >> /etc/apt/sources.list.d/nodesource.list
 	# apt update
 	curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-	apt install -y nodejs
 	# figure out the version of nodejs 20 since apt does not support >= in version
-	# nodejs20_version=$(apt policy nodejs | grep -v "Candidate:" | grep "1nodesource1" | awk '{print $1}' | grep "^20.")
-	# apt install -y nodejs="$nodejs20_version"
+	nodejs20_version=$(apt policy nodejs | grep -v "Candidate:" | grep "1nodesource1" | awk '{print $1}' | grep "^20." | head -n 1)
+	apt install -y nodejs="$nodejs20_version"
 fi
 
 gem install --no-document fpm -v 1.14.2
