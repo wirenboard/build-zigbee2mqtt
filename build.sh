@@ -24,6 +24,8 @@ echo "Prepare environment"
 apt-get update
 apt-get install -y git make g++ gcc ruby ruby-dev rubygems build-essential
 
+whereis npm
+
 if [[ "${PKG_NAME}" == "zigbee2mqtt-1.18.1" ]]; then
 	apt install -y nodejs
 else
