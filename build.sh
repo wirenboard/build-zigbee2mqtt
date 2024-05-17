@@ -51,7 +51,7 @@ if [[ "${PKG_NAME}" == "zigbee2mqtt-1.18.1" ]]; then
     sed -i 's#|| ^15#|| ^15 || ^16#' package.json
 fi
 
-find / -iname npm
+whereis npm
 
 npm_build() {
     npm ci -d
