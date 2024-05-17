@@ -22,6 +22,8 @@ if [[ ! -d "$PROJECT_SUBDIR" ]]; then
     exit 2
 fi
 
+ls -laR /usr/lib
+
 echo "Prepare environment"
 apt-get update
 apt-get install -y git make g++ gcc ruby ruby-dev rubygems build-essential
