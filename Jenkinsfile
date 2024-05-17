@@ -77,6 +77,7 @@ pipeline {
 
                 sh "printenv | sort"
                 sh "wbdev root printenv | sort"
+                sh "docker info"
                 sh "wbdev chroot bash -c 'NPM_REGISTRY=${params.NPM_REGISTRY} ./build.sh ${name} ${VERSION} ${PROJECT_SUBDIR} ${RESULT_SUBDIR} ${specialParams}'"
             }}
             post {
