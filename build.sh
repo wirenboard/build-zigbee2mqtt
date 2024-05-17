@@ -52,6 +52,8 @@ if [[ "${PKG_NAME}" == "zigbee2mqtt-1.18.1" ]]; then
 fi
 
 npm_build() {
+    node -v
+    npm -v
     # npm ci -d
     npm ci --ignore-scripts
     if [[ "${PKG_NAME}" != "zigbee2mqtt-1.18.1" ]]; then
