@@ -1,5 +1,7 @@
 #!/bin/bash -xe
 
+whoami
+
 NPM_REGISTRY=${NPM_REGISTRY:-}
 
 if [[ $# -lt 4 ]]; then
