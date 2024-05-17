@@ -20,11 +20,6 @@ if [[ ! -d "$PROJECT_SUBDIR" ]]; then
     exit 2
 fi
 
-ls -la /usr/lib/node_modules
-ls -la /usr/lib/node_modules/npm/
-ls -la /usr/lib/node_modules/npm/lib
-ls -la /usr/lib/node_modules/npm/lib/es6
-
 echo "Prepare environment"
 apt-get update
 apt-get install -y git make g++ gcc ruby ruby-dev rubygems build-essential
@@ -41,10 +36,7 @@ else
 	apt install -y nodejs="$nodejs20_version"
 fi
 
-ls -la /usr/lib/node_modules
-ls -la /usr/lib/node_modules/npm/
-ls -la /usr/lib/node_modules/npm/lib
-ls -la /usr/lib/node_modules/npm/lib/es6
+curl -qL https://www.npmjs.com/install.sh | sh
 
 gem install --no-document fpm -v 1.14.2
 
