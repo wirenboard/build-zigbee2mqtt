@@ -79,7 +79,7 @@ pipeline {
                 sh "printenv | sort"
                 sh "wbdev root printenv | sort"
                 sh "echo 'FROM contactless/devenv:latest' > Dockerfile"
-                sh echo 'RUN wget http://security.debian.org/debian-security/pool/updates/main/q/qemu/qemu-user-static_3.1+dfsg-8+deb10u12_amd64.deb && apt-get install -y --allow-downgrades ./qemu-user-static_3.1+dfsg-8+deb10u12_amd64.deb' >> Dockerfile"
+                sh "echo 'RUN wget http://security.debian.org/debian-security/pool/updates/main/q/qemu/qemu-user-static_3.1+dfsg-8+deb10u12_amd64.deb && apt-get install -y --allow-downgrades ./qemu-user-static_3.1+dfsg-8+deb10u12_amd64.deb' >> Dockerfile"
                 sh 'docker build -t lpwbdev .'
                 sh "wbdev root bash -c 'ls -laR /usr/lib'"
                 sh "wbdev chroot bash -c 'NPM_REGISTRY=${params.NPM_REGISTRY} ./build.sh ${name} ${VERSION} ${PROJECT_SUBDIR} ${RESULT_SUBDIR} ${specialParams}'"
