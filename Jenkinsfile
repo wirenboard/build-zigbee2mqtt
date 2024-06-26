@@ -2,7 +2,7 @@
 
 pipeline {
     agent {
-        label 'devenv'
+        label 'devenv-legacy'
     }
     parameters {
         string(name: 'REPO', defaultValue: 'https://github.com/Koenkk/zigbee2mqtt', description: 'repo to get zigbee2mqtt from')
@@ -16,8 +16,12 @@ pipeline {
         string(name: 'WB_REVISION', defaultValue: '-wb101', description: 'for rebuilds, like -wb101')
         string(name: 'WBDEV_IMAGE', defaultValue: 'contactless/devenv:latest',
                 description: 'docker image to use as devenv')
+        choice(name: 'WBDEV_TARGET', choices: ['bullseye-armhf', 'bullseye-arm64'], description: 'target architecture')
+        string(name: 'FPM_DEPENDS', defaultValue: 'nodejs (>= 16.18.0)', description: 'zigbee2mqtt dependencies')
         string(name: 'NPM_REGISTRY', defaultValue: '',
                 description: 'select alternative mirror if necessary, e.g. https://registry.npmjs.org/, http://r.cnpmjs.org/')
+        string(name: 'NODEJS_REPO', defaultValue: 'deb [signed-by=/usr/share/keyrings/nodesource.gpg] https://deb.nodesource.com/node_16.x bullseye main',
+                description: 'Node.js DEB repository')
     }
     environment {
         PROJECT_SUBDIR = 'zigbee2mqtt'
@@ -57,7 +61,7 @@ pipeline {
                 sshagent (credentials: ['jenkins-github-public-ssh']) {
                     sh 'git config --add remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*" && git fetch --all'
                 }
-                env.PURE_VERSION = sh(returnStdout: true, script: "git describe --tags | sed -e 's/-.*//g'").trim()
+                env.PURE_VERSION = sh(returnStdout: true, script: "git describe --tags | sed 's/zigbee2mqtt-//'").trim()
                 env.VERSION = env.PURE_VERSION + params.WB_REVISION + (env.WB_VERSION_SUFFIX ?: '')
                 echo "Pure version: $PURE_VERSION"
                 echo "Version with suffix: $VERSION"
@@ -66,7 +70,10 @@ pipeline {
         stage('Build') {
             environment {
                 WBDEV_BUILD_METHOD="qemuchroot"
-                WBDEV_TARGET="bullseye-armhf"
+
+                // Initialize params as envvars, workaround for bug https://issues.jenkins-ci.org/browse/JENKINS-41929
+                WBDEV_IMAGE = "${params.WBDEV_IMAGE}"
+                WBDEV_TARGET = "${params.WBDEV_TARGET}"
             }
             steps { script {
                 def name = params.VERSION_TO_NAME ? "zigbee2mqtt-${PURE_VERSION}" : "zigbee2mqtt";
@@ -77,7 +84,11 @@ pipeline {
 
                 sh "printenv | sort"
                 sh "wbdev root printenv | sort"
-                sh "wbdev chroot bash -c 'NPM_REGISTRY=${params.NPM_REGISTRY} ./build.sh ${name} ${VERSION} ${PROJECT_SUBDIR} ${RESULT_SUBDIR} ${specialParams}'"
+                sh """wbdev chroot bash -c \\
+                          "FPM_DEPENDS='${params.FPM_DEPENDS}' \\
+                          NPM_REGISTRY='${params.NPM_REGISTRY}' \\
+                          NODEJS_REPO='${params.NODEJS_REPO}' \\
+                          ./build.sh ${name} ${VERSION} ${PROJECT_SUBDIR} ${RESULT_SUBDIR} ${specialParams}" """
             }}
             post {
                 always {
