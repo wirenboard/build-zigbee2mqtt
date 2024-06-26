@@ -2,7 +2,7 @@
 
 pipeline {
     agent {
-        label 'devenv'
+        label 'devenv-legacy'
     }
     parameters {
         string(name: 'REPO', defaultValue: 'https://github.com/Koenkk/zigbee2mqtt', description: 'repo to get zigbee2mqtt from')
