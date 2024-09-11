@@ -17,10 +17,10 @@ pipeline {
         string(name: 'WBDEV_IMAGE', defaultValue: 'contactless/devenv:latest',
                 description: 'docker image to use as devenv')
         choice(name: 'WBDEV_TARGET', choices: ['bullseye-armhf', 'bullseye-arm64'], description: 'target architecture')
-        choice(name: 'FPM_DEPENDS', choices: ['nodejs (>= 16), nodejs (<< 20)', 'nodejs (>= 20)'], description: 'zigbee2mqtt dependencies')
+        choice(name: 'FPM_DEPENDS', choices: ['nodejs (>= 20)', 'nodejs (>= 16), nodejs (<< 20)'], description: 'zigbee2mqtt dependencies')
         string(name: 'NPM_REGISTRY', defaultValue: '',
                 description: 'select alternative mirror if necessary, e.g. https://registry.npmjs.org/, http://r.cnpmjs.org/')
-        choice(name: 'NODEJS_REPO', choices: ['node_16.x', 'node_20.x'], description: 'Node.js DEB repository')
+        choice(name: 'NODEJS_REPO', choices: ['node_20.x', 'node_16.x'], description: 'Node.js DEB repository')
     }
     environment {
         PROJECT_SUBDIR = 'zigbee2mqtt'

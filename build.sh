@@ -1,7 +1,7 @@
 #!/bin/bash -xe
 
 NPM_REGISTRY=${NPM_REGISTRY:-}
-FPM_DEPENDS=${FPM_DEPENDS:-"nodejs (>= 16.18.0)"}
+FPM_DEPENDS=${FPM_DEPENDS:-"nodejs (>= 16)"}
 NODEJS_REPO=${NODEJS_REPO:-"deb [signed-by=/usr/share/keyrings/nodesource.gpg] https://deb.nodesource.com/node_16.x bullseye main"}
 
 if [[ $# -lt 4 ]]; then
