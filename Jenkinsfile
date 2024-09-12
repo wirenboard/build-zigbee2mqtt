@@ -17,11 +17,9 @@ pipeline {
         string(name: 'WBDEV_IMAGE', defaultValue: 'contactless/devenv:latest',
                 description: 'docker image to use as devenv')
         choice(name: 'WBDEV_TARGET', choices: ['bullseye-armhf', 'bullseye-arm64'], description: 'target architecture')
-        string(name: 'FPM_DEPENDS', defaultValue: 'nodejs (>= 16.18.0)', description: 'zigbee2mqtt dependencies')
+        choice(name: 'FPM_DEPENDS', choices: ['nodejs (>= 20)', 'nodejs-16'], description: 'zigbee2mqtt dependencies')
         string(name: 'NPM_REGISTRY', defaultValue: '',
                 description: 'select alternative mirror if necessary, e.g. https://registry.npmjs.org/, http://r.cnpmjs.org/')
-        string(name: 'NODEJS_REPO', defaultValue: 'deb [signed-by=/usr/share/keyrings/nodesource.gpg] https://deb.nodesource.com/node_16.x bullseye main',
-                description: 'Node.js DEB repository')
     }
     environment {
         PROJECT_SUBDIR = 'zigbee2mqtt'
@@ -87,7 +85,6 @@ pipeline {
                 sh """wbdev chroot bash -c \\
                           "FPM_DEPENDS='${params.FPM_DEPENDS}' \\
                           NPM_REGISTRY='${params.NPM_REGISTRY}' \\
-                          NODEJS_REPO='${params.NODEJS_REPO}' \\
                           ./build.sh ${name} ${VERSION} ${PROJECT_SUBDIR} ${RESULT_SUBDIR} ${specialParams}" """
             }}
             post {
