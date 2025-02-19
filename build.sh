@@ -28,9 +28,11 @@ apt-get install -y git make g++ gcc ruby ruby-dev rubygems build-essential
 apt-get satisfy -y "$FPM_DEPENDS"
 gem install --no-document fpm -v 1.14.2
 
+corepack enable pnpm
+
 if [[ -n "$NPM_REGISTRY" ]]; then
     echo "Override NPM registry"
-    npm set registry "$NPM_REGISTRY"
+    pnpm config set registry "$NPM_REGISTRY"
 fi
 
 pushd "$PROJECT_SUBDIR" || exit 1
@@ -42,13 +44,13 @@ if [[ "${PKG_NAME}" == "zigbee2mqtt-1.18.1" ]]; then
 fi
 
 npm_build() {
-    npm ci -d
+    pnpm install --frozen-lockfile
     if [[ $? -ne 0 ]]; then
         echo "npm ci failed, exiting."
         exit 1
     fi
     if [[ "${PKG_NAME}" != "zigbee2mqtt-1.18.1" ]]; then
-        npm run build -d  # required only for newer zigbee2mqtt to compile typescript
+        pnpm run build  # required only for newer zigbee2mqtt to compile typescript
         if [[ $? -ne 0 ]]; then
             echo "npm run build failed, exiting."
             exit 1
