@@ -5,6 +5,7 @@ mqtt:
   server: 'mqtt://localhost'
 serial:
   port: /dev/ttyMOD4
+  adapter: zstack
 advanced:
   rtscts: false
   last_seen: epoch
