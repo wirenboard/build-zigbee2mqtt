@@ -11,3 +11,8 @@ if ! dpkg-query --showformat='\${Conffiles}' --show 'zigbee2mqtt*' | grep config
     echo "Saving modified config file from old malformed zigbee2mqtt package"
     mv $CONFIG_FILE $CONFIG_FILE.wb-old
 fi
+
+if ! command -v pnpm &> /dev/null; then
+    echo "pnpm is not installed. Install via corepack..."
+    corepack enable pnpm
+fi
