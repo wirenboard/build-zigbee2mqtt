@@ -4,6 +4,7 @@ After=network.target
 
 [Service]
 ExecStart=/usr/bin/npm start
+SyslogIdentifier=zigbee2mqtt
 WorkingDirectory=/mnt/data/root/zigbee2mqtt
 StandardOutput=inherit
 StandardError=inherit
