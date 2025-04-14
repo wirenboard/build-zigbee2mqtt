@@ -14,7 +14,7 @@ pipeline {
                 description: 'use only you know what you are doing, replace existing version of package')
         booleanParam(name: 'ADD_VERSION_SUFFIX', defaultValue: true, description: 'for dev branches only')
         string(name: 'WB_REVISION', defaultValue: '-wb101', description: 'for rebuilds, like -wb101')
-        string(name: 'WBDEV_IMAGE', defaultValue: 'contactless/devenv:latest',
+        string(name: 'WBDEV_IMAGE', defaultValue: 'registry.wirenboard.lan/contactless/devenv_test:trixie',
                 description: 'docker image to use as devenv')
         choice(name: 'WBDEV_TARGET', choices: ['bullseye-armhf', 'bullseye-arm64', 'trixie-armhf', 'trixie-arm64'], description: 'target architecture')
         choice(name: 'FPM_DEPENDS', choices: ['nodejs (>= 20)', 'nodejs-16'], description: 'zigbee2mqtt dependencies')
