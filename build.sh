@@ -26,7 +26,7 @@ echo "Prepare environment"
 apt-get update
 apt-get install -y git make g++ gcc ruby ruby-dev rubygems build-essential
 apt-get satisfy -y "$FPM_DEPENDS"
-gem install --no-document fpm -v 1.14.2
+gem install --no-document fpm -v 1.16.0
 
 corepack enable pnpm
 
