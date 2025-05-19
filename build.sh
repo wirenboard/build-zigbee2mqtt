@@ -1,8 +1,5 @@
 #!/bin/bash -xe
 
-NPM_REGISTRY=${NPM_REGISTRY:-}
-FPM_DEPENDS=${FPM_DEPENDS:-"nodejs (>= 20)"}
-
 if [[ $# -lt 4 ]]; then
     echo >&2 "Usage: $0 <pkg_name> <version> <z2m_dir> <result_dir> [optional fpm flags]"
     echo >&2 "Env used:"
@@ -21,6 +18,16 @@ if [[ ! -d "$PROJECT_SUBDIR" ]]; then
     echo "No project subdirectory $PROJECT_SUBDIR"
     exit 2
 fi
+
+NPM_REGISTRY=${NPM_REGISTRY:-}
+
+if dpkg --compare-versions "$VERSION" le "2.1.1"; then
+    NODEJS_MIN_VERSION="20"
+else
+    NODEJS_MIN_VERSION="22"
+fi
+FPM_DEPENDS=${FPM_DEPENDS:-"nodejs (>= ${NODEJS_MIN_VERSION})"}
+echo "Building zigbee2mqtt $VERSION with Node.js ${NODEJS_MIN_VERSION}+ dependency"
 
 echo "Prepare environment"
 apt-get update
