@@ -8,6 +8,11 @@ if [[ $# -lt 4 ]]; then
     exit 2
 fi
 
+# Call example:
+# - Build from main branch
+#   ./build.sh zigbee2mqtt 2.3.0-wb101 zigbee2mqtt result
+# - Build from custom branch
+#   ./build.sh zigbee2mqtt 2.1.1-wb101~exp~feature+increase+nodejs+to+22~1~g6f19836 
 PKG_NAME=$1
 VERSION=$2
 PROJECT_SUBDIR=$3
@@ -21,13 +26,15 @@ fi
 
 NPM_REGISTRY=${NPM_REGISTRY:-}
 
-if dpkg --compare-versions "$VERSION" le "2.1.1"; then
+BASE_VERSION=$(echo "$VERSION" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+echo "Full version: $VERSION, Base version: $BASE_VERSION"
+if dpkg --compare-versions "$BASE_VERSION" le "2.1.1"; then
     NODEJS_MIN_VERSION="20"
 else
     NODEJS_MIN_VERSION="22"
 fi
 FPM_DEPENDS=${FPM_DEPENDS:-"nodejs (>= ${NODEJS_MIN_VERSION})"}
-echo "Building zigbee2mqtt $VERSION with Node.js ${NODEJS_MIN_VERSION}+ dependency"
+echo "Building zigbee2mqtt $VERSION (base: $BASE_VERSION) with Node.js ${NODEJS_MIN_VERSION}+ dependency"
 
 echo "Prepare environment"
 apt-get update
