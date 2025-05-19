@@ -7,7 +7,8 @@ pipeline {
     parameters {
         string(name: 'REPO', defaultValue: 'https://github.com/Koenkk/zigbee2mqtt', description: 'repo to get zigbee2mqtt from')
         string(name: 'BRANCH', defaultValue: 'master', description: 'for checkout step')
-        string(name: 'TAG', defaultValue: '', description: 'use with VERSION_TO_NAME to build custom version')
+        string(name: 'TAG', defaultValue: '', description: 'use with VERSION_TO_NAME to build custom version (leave empty for latest tag)')
+        booleanParam(name: 'USE_LATEST_TAG', defaultValue: true, description: 'automatically use latest tag when TAG is empty')
         booleanParam(name: 'VERSION_TO_NAME', defaultValue: false, description: 'build package like zigbee2mqtt-1.18.1')
         booleanParam(name: 'UPLOAD_TO_POOL', defaultValue: false, description: 'disabled by default for repo safety')
         booleanParam(name: 'FORCE_OVERWRITE', defaultValue: false,
@@ -32,14 +33,30 @@ pipeline {
         stage('Checkout') { steps { dir("$PROJECT_SUBDIR") {
             git branch: params.BRANCH, url: params.REPO
         }}}
+        stage('Find latest tag') {
+            when { expression {
+                params.USE_LATEST_TAG && params.TAG == ""
+            }}
+            steps { dir("$PROJECT_SUBDIR") { script {
+                sshagent (credentials: ['jenkins-github-public-ssh']) {
+                    sh 'git config --add remote.origin.fetch "+refs/tags/*:refs/tags/*" && git fetch --all'
+                    env.LATEST_TAG = sh(returnStdout: true, script: "git tag --sort=-creatordate | head -n 1").trim()
+                    echo "Found latest tag: ${env.LATEST_TAG}"
+                }
+            }}}
+        }
         stage('Checkout tag') {
             when { expression {
-                (params.TAG != "")
+                (params.TAG != "") || (params.USE_LATEST_TAG && env.LATEST_TAG != null)
             }}
             steps { dir("$PROJECT_SUBDIR") {
                 sshagent (credentials: ['jenkins-github-public-ssh']) {
                     sh 'git config --add remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*" && git fetch --all'
-                    sh "git checkout ${params.TAG}"
+                    script {
+                        def tagToUse = params.TAG ?: env.LATEST_TAG
+                        echo "Checking out tag: ${tagToUse}"
+                        sh "git checkout ${tagToUse}"
+                    }
                 }
             }}
         }
