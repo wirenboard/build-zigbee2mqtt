@@ -44,7 +44,7 @@ pipeline {
         }}}
         stage('Find latest tag') {
             when { expression {
-+                params.TAG == ""
+                params.TAG == ""
             }}
             steps { dir("$PROJECT_SUBDIR") { script {
                 sshagent (credentials: ['jenkins-github-public-ssh']) {
