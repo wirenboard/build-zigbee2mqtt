@@ -2,12 +2,14 @@
 
 NPM_REGISTRY=${NPM_REGISTRY:-}
 FPM_DEPENDS=${FPM_DEPENDS:-"nodejs (>= 22)"}
+USE_UNSTABLE_DEPS=${USE_UNSTABLE_DEPS:-}
 
 if [[ $# -lt 4 ]]; then
     echo >&2 "Usage: $0 <pkg_name> <version> <z2m_dir> <result_dir> [optional fpm flags]"
     echo >&2 "Env used:"
     echo -e >&2 "\tFPM_DEPENDS\tdependencies"
     echo -e >&2 "\tNPM_REGISTRY\tnpm registry address override"
+    echo -e >&2 "\tUSE_UNSTABLE_DEPS\tuse testing repositories if set to 'y'"
     exit 2
 fi
 
@@ -33,16 +35,17 @@ fi
 
 echo "Prepare environment"
 
-echo "Adding testing repository to wirenboard.list"
-cat /etc/apt/sources.list.d/wirenboard.list
-if [ -f /etc/apt/sources.list.d/wirenboard.list ]; then
-    echo "wirenboard.list file already exists"
-    rm /etc/apt/sources.list.d/wirenboard.list
+echo "Current APT configuration:"
+cat /etc/apt/sources.list.d/wirenboard.list || echo "File doesn't exist"
+if [[ "$USE_UNSTABLE_DEPS" == "y" ]]; then
+    echo "Using testing repositories as requested."
+    if [ -f /etc/apt/sources.list.d/wirenboard.list ]; then
+        echo "wirenboard.list file already exists, removing it"
+        rm /etc/apt/sources.list.d/wirenboard.list
+    fi
+    echo "Creating wirenboard.list file with testing repository"
+    echo "deb http://deb.wirenboard.com/wb7/bullseye testing main" > /etc/apt/sources.list.d/wirenboard.list
 fi
-
-echo "Creating wirenboard.list file"
-echo "deb http://deb.wirenboard.com/wb7/bullseye testing main" > /etc/apt/sources.list.d/wirenboard.list
-
 
 apt-get update
 apt-get install -y git make g++ gcc ruby ruby-dev rubygems build-essential

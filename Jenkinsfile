@@ -57,8 +57,6 @@ pipeline {
                     echo "Found latest tag: ${env.LATEST_TAG}"
 
                     currentBuild.displayName += " latest_tag=${env.LATEST_TAG}"
-                    currentBuild.result = 'ABORTED'
-                    // stageResult(message: "Tag: ${env.LATEST_TAG}")
                 }
             }}}
         }
@@ -102,7 +100,6 @@ pipeline {
         stage('Build') {
             environment {
                 WBDEV_BUILD_METHOD="qemuchroot"
-                WBDEV_USE_UNSTABLE_DEPS = "${params.USE_UNSTABLE_DEPS ? 'y' : ''}"
 
                 // Initialize params as envvars, workaround for bug https://issues.jenkins-ci.org/browse/JENKINS-41929
                 WBDEV_IMAGE = "${params.WBDEV_IMAGE}"
@@ -120,6 +117,7 @@ pipeline {
                 sh """wbdev chroot bash -c \\
                           "FPM_DEPENDS='${params.FPM_DEPENDS}' \\
                           NPM_REGISTRY='${params.NPM_REGISTRY}' \\
+                          USE_UNSTABLE_DEPS='${params.USE_UNSTABLE_DEPS ? 'y' : ''}' \\
                           ./build.sh ${name} ${VERSION} ${PROJECT_SUBDIR} ${RESULT_SUBDIR} ${specialParams}" """
             }}
             post {
