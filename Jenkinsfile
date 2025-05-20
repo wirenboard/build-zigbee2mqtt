@@ -29,9 +29,12 @@ pipeline {
     stages {
         stage('Initialize build') { steps {
             script {
-                def buildName = "#${BUILD_NUMBER}:"
-                if (params.TAG) buildName += " tag=${params.TAG}" else buildName += " branch=${params.BRANCH}"
-                buildName += ", target=${params.WBDEV_TARGET}"
+                def buildName = "#${BUILD_NUMBER}: target=${params.WBDEV_TARGET}"
+                if (params.TAG) {
+                    buildName += " tag=${params.TAG}"
+                } else if (!params.USE_LATEST_TAG) {
+                    buildName += " branch=${params.BRANCH}"
+                }
                 currentBuild.displayName = buildName
                 currentBuild.description = "Build with depend: Node.js ${params.FPM_DEPENDS} for ${params.WBDEV_TARGET}"
             }
@@ -51,6 +54,8 @@ pipeline {
                     sh 'git config --add remote.origin.fetch "+refs/tags/*:refs/tags/*" && git fetch --all'
                     env.LATEST_TAG = sh(returnStdout: true, script: "git tag --sort=-creatordate | head -n 1").trim()
                     echo "Found latest tag: ${env.LATEST_TAG}"
+
+                    currentBuild.displayName += " latest_tag=${env.LATEST_TAG}"
                 }
             }}}
         }
