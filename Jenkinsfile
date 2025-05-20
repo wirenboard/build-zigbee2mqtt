@@ -116,11 +116,6 @@ pipeline {
                 sh "printenv | sort"
                 sh "wbdev root printenv | sort"
                 sh """wbdev chroot bash -c \\
-                          "apt-cache madison nodejs > madison_output.txt" """
-                sh """wbdev chroot bash -c \\
-                          "apt search nodejs > search_output.txt" """
-                archiveArtifacts artifacts: "madison_output.txt,search_output.txt"
-                sh """wbdev chroot bash -c \\
                           "FPM_DEPENDS='${params.FPM_DEPENDS}' \\
                           NPM_REGISTRY='${params.NPM_REGISTRY}' \\
                           ./build.sh ${name} ${VERSION} ${PROJECT_SUBDIR} ${RESULT_SUBDIR} ${specialParams}" """
