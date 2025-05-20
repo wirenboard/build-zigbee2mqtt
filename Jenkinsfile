@@ -55,7 +55,7 @@ pipeline {
                     env.LATEST_TAG = sh(returnStdout: true, script: "git tag --sort=-creatordate | head -n 1").trim()
                     echo "Found latest tag: ${env.LATEST_TAG}"
 
-                    currentBuild.displayName += " latest_tag=${env.LATEST_TAG}"
+                    currentBuild.displayName += ", latest_tag=${env.LATEST_TAG}"
                 }
             }}}
         }
