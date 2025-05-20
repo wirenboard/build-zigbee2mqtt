@@ -117,7 +117,7 @@ pipeline {
                 sh """wbdev chroot bash -c \\
                           "apt-cache madison nodejs > madison_output.txt" """
                 sh """wbdev chroot bash -c \\
-                          "apt search nodejs > search_output.txt"" """
+                          "apt search nodejs > search_output.txt" """
                 archiveArtifacts artifacts: "madison_output.txt,search_output.txt"
                 sh """wbdev chroot bash -c \\
                           "FPM_DEPENDS='${params.FPM_DEPENDS}' \\
