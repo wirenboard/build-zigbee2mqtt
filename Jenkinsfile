@@ -29,11 +29,11 @@ pipeline {
     stages {
         stage('Initialize') { steps {
             script {
-                def buildName = "${params.BRANCH}"
-                if (params.TAG) buildName += "-${params.TAG}"
+                def buildName = "#${BUILD_NUMBER}-z2m"
+                if (params.TAG) buildName += "-${params.TAG}" else buildName += "-${params.BRANCH}"
                 buildName += "-${params.WBDEV_TARGET}"
                 currentBuild.displayName = buildName
-                currentBuild.description = "Node.js ${params.FPM_DEPENDS} for ${params.WBDEV_TARGET}"
+                currentBuild.description = "Build with depend: Node.js ${params.FPM_DEPENDS} for ${params.WBDEV_TARGET}"
             }
         }}
         stage('Cleanup workspace') { steps {
