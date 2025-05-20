@@ -18,7 +18,7 @@ pipeline {
         string(name: 'WBDEV_IMAGE', defaultValue: 'contactless/devenv:latest',
                 description: 'docker image to use as devenv')
         choice(name: 'WBDEV_TARGET', choices: ['bullseye-armhf', 'bullseye-arm64', 'trixie-armhf', 'trixie-arm64'], description: 'target architecture')
-        choice(name: 'FPM_DEPENDS', choices: ['nodejs (>= 20)', 'nodejs-16'], description: 'zigbee2mqtt dependencies')
+        choice(name: 'FPM_DEPENDS', choices: ['nodejs (>= 22)', 'nodejs-16'], description: 'zigbee2mqtt dependencies')
         string(name: 'NPM_REGISTRY', defaultValue: '',
                 description: 'select alternative mirror if necessary, e.g. https://registry.npmjs.org/, http://r.cnpmjs.org/')
     }
