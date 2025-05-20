@@ -7,8 +7,8 @@ pipeline {
     parameters {
         string(name: 'REPO', defaultValue: 'https://github.com/Koenkk/zigbee2mqtt', description: 'repo to get zigbee2mqtt from')
         string(name: 'BRANCH', defaultValue: 'master', description: 'for checkout step')
-        string(name: 'TAG', defaultValue: '', description: 'use with VERSION_TO_NAME to build custom version (leave empty for latest tag)')
         booleanParam(name: 'USE_LATEST_TAG', defaultValue: true, description: 'automatically use latest tag when TAG is empty')
+        string(name: 'TAG', defaultValue: '', description: 'use with VERSION_TO_NAME to build custom version (leave empty for latest tag)')
         booleanParam(name: 'VERSION_TO_NAME', defaultValue: false, description: 'build package like zigbee2mqtt-1.18.1')
         booleanParam(name: 'UPLOAD_TO_POOL', defaultValue: false, description: 'disabled by default for repo safety')
         booleanParam(name: 'FORCE_OVERWRITE', defaultValue: false,
