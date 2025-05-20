@@ -32,6 +32,19 @@ if [[ ! -d "$PROJECT_SUBDIR" ]]; then
 fi
 
 echo "Prepare environment"
+
+echo "Adding testing repository to wirenboard.list"
+if [ -f /etc/apt/sources.list.d/wirenboard.list ]; then
+    if ! grep -q "testing" /etc/apt/sources.list.d/wirenboard.list; then
+        echo "deb http://deb.wirenboard.com/wb7/bullseye testing main" >> /etc/apt/sources.list.d/wirenboard.list
+    else
+        echo "testing repository already exists in wirenboard.list"
+    fi
+else
+    echo "Creating wirenboard.list file"
+    echo "deb http://deb.wirenboard.com/wb7/bullseye testing main" > /etc/apt/sources.list.d/wirenboard.list
+fi
+
 apt-get update
 apt-get install -y git make g++ gcc ruby ruby-dev rubygems build-essential
 apt-get satisfy -y "$FPM_DEPENDS"
