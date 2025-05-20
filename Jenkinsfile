@@ -29,7 +29,7 @@ pipeline {
     stages {
         stage('Initialize build') { steps {
             script {
-                def buildName = "#${BUILD_NUMBER} z2m:"
+                def buildName = "#${BUILD_NUMBER}:"
                 if (params.TAG) buildName += " tag=${params.TAG}" else buildName += " branch=${params.BRANCH}"
                 buildName += ", target=${params.WBDEV_TARGET}"
                 currentBuild.displayName = buildName
