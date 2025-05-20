@@ -31,9 +31,9 @@ pipeline {
             script {
                 def buildName = "#${BUILD_NUMBER}: target=${params.WBDEV_TARGET}"
                 if (params.TAG) {
-                    buildName += " tag=${params.TAG}"
+                    buildName += ", custom_tag=${params.TAG}"
                 } else if (!params.USE_LATEST_TAG) {
-                    buildName += " branch=${params.BRANCH}"
+                    buildName += ", from_branch=${params.BRANCH}"
                 }
                 currentBuild.displayName = buildName
                 currentBuild.description = "Build with depend: Node.js ${params.FPM_DEPENDS} for ${params.WBDEV_TARGET}"
