@@ -17,7 +17,8 @@ pipeline {
         string(name: 'WBDEV_IMAGE', defaultValue: 'contactless/devenv:latest',
                 description: 'docker image to use as devenv')
         choice(name: 'WBDEV_TARGET', choices: ['bullseye-armhf', 'bullseye-arm64', 'trixie-armhf', 'trixie-arm64'], description: 'target architecture')
-        choice(name: 'FPM_DEPENDS', choices: ['nodejs (>= 22)', 'nodejs-16'], description: 'zigbee2mqtt dependencies')
+        choice(name: 'FPM_DEPENDS', choices: ['nodejs (>= 22)', 'nodejs-16'],
+                description: 'zigbee2mqtt dependencies - used for build time on Jenkins and then write in control file in deb packet')
         booleanParam(name: 'USE_UNSTABLE_DEPS', defaultValue: false,
             description: 'use dependencies from unstable repo if necessary (with lower priority)')
         string(name: 'NPM_REGISTRY', defaultValue: '',
@@ -98,7 +99,7 @@ pipeline {
         }
         stage('Build') {
             environment {
-                WBDEV_BUILD_METHOD="sbuild"
+                WBDEV_BUILD_METHOD="qemuchroot"
                 WBDEV_USE_UNSTABLE_DEPS = "${params.USE_UNSTABLE_DEPS ? 'y' : ''}"
 
                 // Initialize params as envvars, workaround for bug https://issues.jenkins-ci.org/browse/JENKINS-41929
