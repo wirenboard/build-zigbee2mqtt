@@ -99,7 +99,7 @@ pipeline {
         stage('Build') {
             environment {
                 WBDEV_BUILD_METHOD="qemuchroot"
-                WBDEV_USE_UNSTABLE_DEPS = "${params.USE_UNSTABLE_DEPS ? 'y' : ''}"
+                WBDEV_USE_EXPERIMENTAL_DEPS = "${params.USE_UNSTABLE_DEPS ? 'y' : ''}"
 
                 // Initialize params as envvars, workaround for bug https://issues.jenkins-ci.org/browse/JENKINS-41929
                 WBDEV_IMAGE = "${params.WBDEV_IMAGE}"
@@ -114,9 +114,9 @@ pipeline {
 
                 sh "printenv | sort"
                 sh "wbdev root printenv | sort"
-                sh """wbdev root bash -c \\
+                sh """wbdev chroot bash -c \\
                           "apt-cache madison nodejs > madison_output.txt" """
-                sh """wbdev root bash -c \\
+                sh """wbdev chroot bash -c \\
                           "apt search nodejs > search_output.txt" """
                 archiveArtifacts artifacts: "madison_output.txt,search_output.txt"
                 sh """wbdev chroot bash -c \\
