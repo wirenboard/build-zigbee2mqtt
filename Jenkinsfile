@@ -57,6 +57,8 @@ pipeline {
                     echo "Found latest tag: ${env.LATEST_TAG}"
 
                     currentBuild.displayName += " latest_tag=${env.LATEST_TAG}"
+                    currentBuild.result = 'ABORTED'
+                    // stageResult(message: "Tag: ${env.LATEST_TAG}")
                 }
             }}}
         }
