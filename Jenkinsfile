@@ -27,6 +27,15 @@ pipeline {
         RESULT_SUBDIR = 'result'
     }
     stages {
+        stage('Initialize') { steps {
+            script {
+                def buildName = "${params.BRANCH}"
+                if (params.TAG) buildName += "-${params.TAG}"
+                buildName += "-${params.WBDEV_TARGET}"
+                currentBuild.displayName = buildName
+                currentBuild.description = "Node.js ${params.FPM_DEPENDS} for ${params.WBDEV_TARGET}"
+            }
+        }}
         stage('Cleanup workspace') { steps {
             cleanWs deleteDirs: true, patterns: [[pattern: "$RESULT_SUBDIR", type: 'INCLUDE']]
         }}
