@@ -18,7 +18,7 @@ pipeline {
                 description: 'docker image to use as devenv')
         choice(name: 'WBDEV_TARGET', choices: ['bullseye-armhf', 'bullseye-arm64', 'trixie-armhf', 'trixie-arm64'], description: 'target architecture')
         choice(name: 'FPM_DEPENDS', choices: ['nodejs (>= 22)', 'nodejs-16'], description: 'zigbee2mqtt dependencies')
-        booleanParam(name: 'UNSTABLE_DEPS', defaultValue: false,
+        booleanParam(name: 'USE_UNSTABLE_DEPS', defaultValue: false,
             description: 'use dependencies from unstable repo if necessary (with lower priority)')
         string(name: 'NPM_REGISTRY', defaultValue: '',
                 description: 'select alternative mirror if necessary, e.g. https://registry.npmjs.org/, http://r.cnpmjs.org/')
@@ -30,7 +30,7 @@ pipeline {
     stages {
         stage('Initialize build') { steps {
             script {
-                def repoType = params.UNSTABLE_DEPS ? "testing" : "stable"
+                def repoType = params.USE_UNSTABLE_DEPS ? "testing" : "stable"
                 def buildName = "#${BUILD_NUMBER}:${params.WBDEV_TARGET}/${repoType}"
                 if (params.TAG) {
                     buildName += " custom_tag=${params.TAG}"
@@ -99,7 +99,7 @@ pipeline {
         stage('Build') {
             environment {
                 WBDEV_BUILD_METHOD="qemuchroot"
-                WBDEV_USE_UNSTABLE_DEPS = "${params.UNSTABLE_DEPS ? 'y' : ''}"
+                WBDEV_USE_UNSTABLE_DEPS = "${params.USE_UNSTABLE_DEPS ? 'y' : ''}"
 
                 // Initialize params as envvars, workaround for bug https://issues.jenkins-ci.org/browse/JENKINS-41929
                 WBDEV_IMAGE = "${params.WBDEV_IMAGE}"
@@ -115,9 +115,10 @@ pipeline {
                 sh "printenv | sort"
                 sh "wbdev root printenv | sort"
                 sh """wbdev chroot bash -c \\
-                          "apt-cache madison nodejs" """
+                          "apt-cache madison nodejs > madison_output.txt" """
                 sh """wbdev chroot bash -c \\
-                          "apt search nodejs" """
+                          "apt search nodejs > search_output.txt"" """
+                archiveArtifacts artifacts: "madison_output.txt,search_output.txt"
                 sh """wbdev chroot bash -c \\
                           "FPM_DEPENDS='${params.FPM_DEPENDS}' \\
                           NPM_REGISTRY='${params.NPM_REGISTRY}' \\
