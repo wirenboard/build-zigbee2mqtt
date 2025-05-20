@@ -26,7 +26,6 @@ pipeline {
     environment {
         PROJECT_SUBDIR = 'zigbee2mqtt'
         RESULT_SUBDIR = 'result'
-        WBDEV_USE_UNSTABLE_DEPS = "${params.UNSTABLE_DEPS ? 'y' : ''}"
     }
     stages {
         stage('Initialize build') { steps {
@@ -100,6 +99,7 @@ pipeline {
         stage('Build') {
             environment {
                 WBDEV_BUILD_METHOD="qemuchroot"
+                WBDEV_USE_UNSTABLE_DEPS = "${params.UNSTABLE_DEPS ? 'y' : ''}"
 
                 // Initialize params as envvars, workaround for bug https://issues.jenkins-ci.org/browse/JENKINS-41929
                 WBDEV_IMAGE = "${params.WBDEV_IMAGE}"
