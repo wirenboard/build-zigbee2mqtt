@@ -7,8 +7,7 @@ pipeline {
     parameters {
         string(name: 'REPO', defaultValue: 'https://github.com/Koenkk/zigbee2mqtt', description: 'repo to get zigbee2mqtt from')
         string(name: 'BRANCH', defaultValue: 'master', description: 'for checkout step')
-        booleanParam(name: 'USE_LATEST_TAG', defaultValue: true, description: 'automatically use latest tag (when TAG is empty)')
-        string(name: 'TAG', defaultValue: '', description: 'use with VERSION_TO_NAME to build custom version (leave empty for latest tag)')
+        string(name: 'TAG', defaultValue: '', description: 'use with VERSION_TO_NAME to build custom version (leave empty for find and use latest tag automatically)')
         booleanParam(name: 'VERSION_TO_NAME', defaultValue: false, description: 'adds version number to package name as suffix, creating names like zigbee2mqtt-1.18.1')
         booleanParam(name: 'UPLOAD_TO_POOL', defaultValue: false, description: 'disabled by default for repo safety')
         booleanParam(name: 'FORCE_OVERWRITE', defaultValue: false,
@@ -32,8 +31,6 @@ pipeline {
                 def buildName = "#${BUILD_NUMBER}: target=${params.WBDEV_TARGET}"
                 if (params.TAG) {
                     buildName += ", custom_tag=${params.TAG}"
-                } else if (!params.USE_LATEST_TAG) {
-                    buildName += ", from_branch=${params.BRANCH}"
                 }
                 currentBuild.displayName = buildName
                 currentBuild.description = "Build with depend: Node.js ${params.FPM_DEPENDS} for ${params.WBDEV_TARGET}"
@@ -47,7 +44,7 @@ pipeline {
         }}}
         stage('Find latest tag') {
             when { expression {
-                params.USE_LATEST_TAG && params.TAG == ""
++                params.TAG == ""
             }}
             steps { dir("$PROJECT_SUBDIR") { script {
                 sshagent (credentials: ['jenkins-github-public-ssh']) {
@@ -61,7 +58,7 @@ pipeline {
         }
         stage('Checkout tag') {
             when { expression {
-                (params.TAG != "") || (params.USE_LATEST_TAG && env.LATEST_TAG != null)
+                (params.TAG != "") || (env.LATEST_TAG != null)
             }}
             steps { dir("$PROJECT_SUBDIR") {
                 sshagent (credentials: ['jenkins-github-public-ssh']) {
