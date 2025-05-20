@@ -27,11 +27,11 @@ pipeline {
         RESULT_SUBDIR = 'result'
     }
     stages {
-        stage('Initialize') { steps {
+        stage('Initialize build') { steps {
             script {
-                def buildName = "#${BUILD_NUMBER}-z2m"
-                if (params.TAG) buildName += "-${params.TAG}" else buildName += "-${params.BRANCH}"
-                buildName += "-${params.WBDEV_TARGET}"
+                def buildName = "#${BUILD_NUMBER} z2m:"
+                if (params.TAG) buildName += " tag=${params.TAG}" else buildName += " branch=${params.BRANCH}"
+                buildName += ", target=${params.WBDEV_TARGET}"
                 currentBuild.displayName = buildName
                 currentBuild.description = "Build with depend: Node.js ${params.FPM_DEPENDS} for ${params.WBDEV_TARGET}"
             }
