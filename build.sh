@@ -12,10 +12,14 @@ if [[ $# -lt 4 ]]; then
 fi
 
 # Call example from wirenboard/build-zigbee2mqtt repo Jenkins branches:
+#   ./build.sh zigbee2mqtt <!VERSION!> zigbee2mqtt result
+# VERSION incert examples:
 # - Build from branch "main" with set TAG = 2.3.0:
-#   ./build.sh zigbee2mqtt 2.3.0-wb101 zigbee2mqtt result
+#   "2.3.0-wb101"
 # - Build from custom branch "feature/increase-nodejs-to-22":
-#   ./build.sh zigbee2mqtt 2.1.1-wb101~exp~feature+increase+nodejs+to+22~1~g6f19836 
+#   "2.1.1-wb101~exp~feature+increase+nodejs+to+22~1~g6f19836"
+# - Build from custom branch "feature/increase-nodejs-to-22" without set TAG and use latest tag:
+#   "2.3.0-2-g9d1427c-wb101~exp~feature+increase+nodejs+to+22~6~gcdf2584"
 PKG_NAME=$1
 VERSION=$2
 PROJECT_SUBDIR=$3
