@@ -35,10 +35,10 @@ echo "Prepare environment"
 
 echo "Adding testing repository to wirenboard.list"
 cat /etc/apt/sources.list.d/wirenboard.list
-apt-cache madison nodejs
-apt search nodejs
+apt-cache madison nodejs 2>&1
+apt search nodejs 2>&1
 if [ -f /etc/apt/sources.list.d/wirenboard.list ]; then
-    if ! grep -q "testing" /etc/apt/sources.list.d/wirenboard.list; then
+    if ! grep -q "deb http://deb.wirenboard.com/wb7/bullseye testing main" /etc/apt/sources.list.d/wirenboard.list; then
         echo "deb http://deb.wirenboard.com/wb7/bullseye testing main" >> /etc/apt/sources.list.d/wirenboard.list
     else
         echo "testing repository already exists in wirenboard.list"
