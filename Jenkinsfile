@@ -31,9 +31,10 @@ pipeline {
     stages {
         stage('Initialize build') { steps {
             script {
-                def buildName = "#${BUILD_NUMBER}: target=${params.WBDEV_TARGET}"
+                def repoType = params.UNSTABLE_DEPS ? "testing" : "stable"
+                def buildName = "#${BUILD_NUMBER}:${params.WBDEV_TARGET}/${repoType}"
                 if (params.TAG) {
-                    buildName += ", custom_tag=${params.TAG}"
+                    buildName += " custom_tag=${params.TAG}"
                 }
                 currentBuild.displayName = buildName
                 currentBuild.description = "Build with depend: Node.js ${params.FPM_DEPENDS} for ${params.WBDEV_TARGET}"
@@ -55,7 +56,7 @@ pipeline {
                     env.LATEST_TAG = sh(returnStdout: true, script: "git tag --sort=-creatordate | head -n 1").trim()
                     echo "Found latest tag: ${env.LATEST_TAG}"
 
-                    currentBuild.displayName += ", latest_tag=${env.LATEST_TAG}"
+                    currentBuild.displayName += " latest_tag=${env.LATEST_TAG}"
                 }
             }}}
         }
