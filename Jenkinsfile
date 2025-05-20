@@ -18,7 +18,7 @@ pipeline {
                 description: 'docker image to use as devenv')
         choice(name: 'WBDEV_TARGET', choices: ['bullseye-armhf', 'bullseye-arm64', 'trixie-armhf', 'trixie-arm64'], description: 'target architecture')
         choice(name: 'FPM_DEPENDS', choices: ['nodejs (>= 22)', 'nodejs-16'], description: 'zigbee2mqtt dependencies')
-        booleanParam(name: 'UNSTABLE_DEPS', defaultValue: config.useUnstableDeps,
+        booleanParam(name: 'UNSTABLE_DEPS', defaultValue: false,
             description: 'use dependencies from unstable repo if necessary (with lower priority)')
         string(name: 'NPM_REGISTRY', defaultValue: '',
                 description: 'select alternative mirror if necessary, e.g. https://registry.npmjs.org/, http://r.cnpmjs.org/')
