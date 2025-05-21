@@ -45,6 +45,8 @@ pipeline {
         }}
         stage('Checkout') { steps { dir("$PROJECT_SUBDIR") {
             git branch: params.BRANCH, url: params.REPO
+            sh "ls -la"
+            sh "ls -lahR --color=auto"
         }}}
         stage('Find latest tag') {
             when { expression {
@@ -55,6 +57,8 @@ pipeline {
                     sh 'git config --add remote.origin.fetch "+refs/tags/*:refs/tags/*" && git fetch --all'
                     env.LATEST_TAG = sh(returnStdout: true, script: "git tag --sort=-creatordate | head -n 1").trim()
                     echo "Found latest tag: ${env.LATEST_TAG}"
+                    sh "ls -la"
+                    sh "ls -lahR --color=auto"
 
                     currentBuild.displayName += " latest_tag=${env.LATEST_TAG}"
                 }
@@ -71,9 +75,13 @@ pipeline {
                         def tagToUse = params.TAG ?: env.LATEST_TAG
                         echo "Checking out tag: ${tagToUse}"
                         sh "git checkout ${tagToUse}"
+                        sh "ls -la"
+                        sh "ls -lahR --color=auto"
                     }
                 }
                 sh 'git clean -xdf'
+                sh "ls -la"
+                sh "ls -lahR --color=auto"
             }}
         }
         stage('Determine version suffix (this repo)') {
