@@ -68,15 +68,22 @@ if [[ "${PKG_NAME}" == "zigbee2mqtt-1.18.1" ]]; then
 fi
 
 npm_build() {
-    pnpm install --prod --frozen-lockfile
+    pnpm install --frozen-lockfile --include-dev
     if [[ $? -ne 0 ]]; then
-        echo "npm ci failed, exiting."
+        echo "pnpm install failed, exiting."
         exit 1
     fi
+
     if [[ "${PKG_NAME}" != "zigbee2mqtt-1.18.1" ]]; then
         pnpm run build  # required only for newer zigbee2mqtt to compile typescript
         if [[ $? -ne 0 ]]; then
-            echo "npm run build failed, exiting."
+            echo "pnpm run build failed, exiting."
+            exit 1
+        fi
+
+        pnpm prune --prod # remove developer req
+        if [[ $? -ne 0 ]]; then
+            echo "pnpm prune failed, exiting."
             exit 1
         fi
     fi
