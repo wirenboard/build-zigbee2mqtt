@@ -19,7 +19,7 @@ pipeline {
         choice(name: 'WBDEV_TARGET', choices: ['bullseye-armhf', 'bullseye-arm64', 'trixie-armhf', 'trixie-arm64'], description: 'target architecture')
         choice(name: 'FPM_DEPENDS', choices: ['nodejs (>= 22)', 'nodejs-16'],
                 description: 'zigbee2mqtt dependencies - used for build time on Jenkins and then write in control file in deb packet')
-        booleanParam(name: 'USE_UNSTABLE_DEPS', defaultValue: false,
+        booleanParam(name: 'USE_UNSTABLE_DEPS', defaultValue: true,
             description: 'use dependencies from unstable repo if necessary (with lower priority)')
         string(name: 'NPM_REGISTRY', defaultValue: '',
                 description: 'select alternative mirror if necessary, e.g. https://registry.npmjs.org/, http://r.cnpmjs.org/')
