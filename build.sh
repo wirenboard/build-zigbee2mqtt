@@ -107,7 +107,6 @@ cp -f package/configuration.yaml "$PROJECT_SUBDIR/data/configuration.yaml"
 
 mkdir -p "$RESULT_SUBDIR"
 
-rm -rf "$PROJECT_SUBDIR/.git"
 fpm --input-type dir \
     --output-type deb \
     --name "$PKG_NAME" \

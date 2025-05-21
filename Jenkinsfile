@@ -73,6 +73,7 @@ pipeline {
                         sh "git checkout ${tagToUse}"
                     }
                 }
+                sh 'git clean -xdf'
             }}
         }
         stage('Determine version suffix (this repo)') {
