@@ -4,6 +4,9 @@ pipeline {
     agent {
         label 'devenv-legacy'
     }
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '20', artifactNumToKeepStr: '20'))
+    }
     parameters {
         string(name: 'REPO', defaultValue: 'https://github.com/Koenkk/zigbee2mqtt', description: 'repo to get zigbee2mqtt from')
         string(name: 'BRANCH', defaultValue: 'master', description: 'for checkout step')
@@ -45,8 +48,6 @@ pipeline {
         }}
         stage('Checkout') { steps { dir("$PROJECT_SUBDIR") {
             git branch: params.BRANCH, url: params.REPO
-            sh "ls -la"
-            sh "ls -lahR --color=auto"
         }}}
         stage('Find latest tag') {
             when { expression {
@@ -57,8 +58,6 @@ pipeline {
                     sh 'git config --add remote.origin.fetch "+refs/tags/*:refs/tags/*" && git fetch --all'
                     env.LATEST_TAG = sh(returnStdout: true, script: "git tag --sort=-creatordate | head -n 1").trim()
                     echo "Found latest tag: ${env.LATEST_TAG}"
-                    sh "ls -la"
-                    sh "ls -lahR --color=auto"
 
                     currentBuild.displayName += " latest_tag=${env.LATEST_TAG}"
                 }
@@ -75,12 +74,11 @@ pipeline {
                         def tagToUse = params.TAG ?: env.LATEST_TAG
                         echo "Checking out tag: ${tagToUse}"
                         sh "git checkout ${tagToUse}"
-                        sh "ls -la"
-                        sh "ls -lahR --color=auto"
                     }
                 }
                 sh 'git clean -xdf'
-                sh "ls -la"
+
+                echo "File list before build start:"
                 sh "ls -lahR --color=auto"
             }}
         }
