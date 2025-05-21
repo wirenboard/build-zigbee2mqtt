@@ -33,11 +33,6 @@ if [[ ! -d "$PROJECT_SUBDIR" ]]; then
     exit 2
 fi
 
-echo "= = = = = = = Debug start = = = = = = ="
-apt-cache madison nodejs 2>&1
-apt search nodejs 2>&1
-echo "= = = = = = = Debug stop = = = = = = ="
-
 echo "Prepare environment"
 
 echo "Current APT configuration in wirenboard.list:"

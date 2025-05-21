@@ -78,6 +78,10 @@ pipeline {
                 }
                 sh 'git clean -xdf'
 
+                // FIXME: this output need for catch bug when result
+                //        deb package increase to x2, for example
+                //        normal sise is 27mb, but generate 54mb.
+                //        in big packet we can find pnpm pakages dublicates
                 echo "File list before build start:"
                 sh "ls -lahR --color=auto"
             }}
