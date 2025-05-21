@@ -35,16 +35,32 @@ fi
 
 echo "Prepare environment"
 
-echo "Current APT configuration:"
+echo "Current APT configuration in wirenboard.list:"
 cat /etc/apt/sources.list.d/wirenboard.list || echo "File doesn't exist"
 if [[ "$USE_UNSTABLE_DEPS" == "y" ]]; then
     echo "Using testing repositories as requested."
+
+    # Detect WB version for select some arch repository
     if [ -f /etc/apt/sources.list.d/wirenboard.list ]; then
+        current_repo=$(grep -Eo 'wb[0-9]+' /etc/apt/sources.list.d/wirenboard.list)
+    else
+        echo "Cannot detect current WB platform version. File not found."
+        exit 1
+    fi
+
+    if [[ "$current_repo" == "wb6" || "$current_repo" == "wb8" ]]; then
+        echo "Detected platform: $current_repo"
+        echo "Replacing APT source with testing for $current_repo"
+
         echo "wirenboard.list file already exists, removing it"
         rm /etc/apt/sources.list.d/wirenboard.list
+
+        echo "Creating new wirenboard.list with testing repo for $current_repo"
+        echo "deb http://deb.wirenboard.com/$current_repo/bullseye testing main" > /etc/apt/sources.list.d/wirenboard.list
+    else
+        echo "Unknown platform version: $current_repo"
+        exit 1
     fi
-    echo "Creating wirenboard.list file with testing repository"
-    echo "deb http://deb.wirenboard.com/wb7/bullseye testing main" > /etc/apt/sources.list.d/wirenboard.list
 fi
 
 apt-get update
