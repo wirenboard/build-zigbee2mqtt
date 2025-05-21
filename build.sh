@@ -2,14 +2,14 @@
 
 NPM_REGISTRY=${NPM_REGISTRY:-}
 FPM_DEPENDS=${FPM_DEPENDS:-"nodejs (>= 22)"}
-USE_UNSTABLE_DEPS=${USE_UNSTABLE_DEPS:-}
+USE_TESTING_REPOSITORY=${USE_TESTING_REPOSITORY:-}
 
 if [[ $# -lt 4 ]]; then
     echo >&2 "Usage: $0 <pkg_name> <version> <z2m_dir> <result_dir> [optional fpm flags]"
     echo >&2 "Env used:"
     echo -e >&2 "\tFPM_DEPENDS\tdependencies"
     echo -e >&2 "\tNPM_REGISTRY\tnpm registry address override"
-    echo -e >&2 "\tUSE_UNSTABLE_DEPS\tuse testing repositories if set to 'y'"
+    echo -e >&2 "\tUSE_TESTING_REPOSITORY\tuse testing repositories if set to 'y'"
     exit 2
 fi
 
@@ -33,11 +33,16 @@ if [[ ! -d "$PROJECT_SUBDIR" ]]; then
     exit 2
 fi
 
+echo "= = = = = = = Debug start = = = = = = ="
+apt-cache madison nodejs 2>&1
+apt search nodejs 2>&1
+echo "= = = = = = = Debug stop = = = = = = ="
+
 echo "Prepare environment"
 
 echo "Current APT configuration in wirenboard.list:"
 cat /etc/apt/sources.list.d/wirenboard.list || echo "File doesn't exist"
-if [[ "$USE_UNSTABLE_DEPS" == "y" ]]; then
+if [[ "$USE_TESTING_REPOSITORY" == "y" ]]; then
     echo "Using testing repositories as requested."
 
     # Detect WB version for select some arch repository

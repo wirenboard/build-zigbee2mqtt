@@ -22,7 +22,7 @@ pipeline {
         choice(name: 'WBDEV_TARGET', choices: ['bullseye-armhf', 'bullseye-arm64', 'trixie-armhf', 'trixie-arm64'], description: 'target architecture')
         choice(name: 'FPM_DEPENDS', choices: ['nodejs (>= 22)', 'nodejs-16'],
                 description: 'zigbee2mqtt dependencies - used for build time on Jenkins and then write in control file in deb packet')
-        booleanParam(name: 'USE_UNSTABLE_DEPS', defaultValue: true,
+        booleanParam(name: 'USE_TESTING_REPOSITORY', defaultValue: true,
             description: 'use dependencies from unstable repo if necessary (with lower priority)')
         string(name: 'NPM_REGISTRY', defaultValue: '',
                 description: 'select alternative mirror if necessary, e.g. https://registry.npmjs.org/, http://r.cnpmjs.org/')
@@ -34,7 +34,7 @@ pipeline {
     stages {
         stage('Initialize build') { steps {
             script {
-                def repoType = params.USE_UNSTABLE_DEPS ? "testing" : "stable"
+                def repoType = params.USE_TESTING_REPOSITORY ? "testing" : "stable"
                 def buildName = "#${BUILD_NUMBER}:${params.WBDEV_TARGET}/${repoType}"
                 if (params.TAG) {
                     buildName += " custom_tag=${params.TAG}"
@@ -124,7 +124,7 @@ pipeline {
                 sh """wbdev chroot bash -c \\
                           "FPM_DEPENDS='${params.FPM_DEPENDS}' \\
                           NPM_REGISTRY='${params.NPM_REGISTRY}' \\
-                          USE_UNSTABLE_DEPS='${params.USE_UNSTABLE_DEPS ? 'y' : ''}' \\
+                          USE_TESTING_REPOSITORY='${params.USE_TESTING_REPOSITORY ? 'y' : ''}' \\
                           ./build.sh ${name} ${VERSION} ${PROJECT_SUBDIR} ${RESULT_SUBDIR} ${specialParams}" """
             }}
             post {
