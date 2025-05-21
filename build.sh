@@ -68,7 +68,7 @@ if [[ "${PKG_NAME}" == "zigbee2mqtt-1.18.1" ]]; then
 fi
 
 npm_build() {
-    pnpm install --frozen-lockfile
+    pnpm install --prod --frozen-lockfile
     if [[ $? -ne 0 ]]; then
         echo "npm ci failed, exiting."
         exit 1
