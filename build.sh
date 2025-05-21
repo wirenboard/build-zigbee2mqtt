@@ -67,8 +67,8 @@ if [[ "${PKG_NAME}" == "zigbee2mqtt-1.18.1" ]]; then
     sed -i 's#|| ^15#|| ^15 || ^16#' package.json
 fi
 
-npm_build() {
-    pnpm install --frozen-lockfile --include-dev
+pnpm_build() {
+    pnpm install --frozen-lockfile # install all dependencies include dev
     if [[ $? -ne 0 ]]; then
         echo "pnpm install failed, exiting."
         exit 1
@@ -81,7 +81,7 @@ npm_build() {
             exit 1
         fi
 
-        pnpm prune --prod # remove developer req
+        pnpm prune --prod # remove devDependencies for minimise result size
         if [[ $? -ne 0 ]]; then
             echo "pnpm prune failed, exiting."
             exit 1
@@ -91,7 +91,7 @@ npm_build() {
 
 BUILD_DONE=false
 for i in {1..5}; do
-    if npm_build; then
+    if pnpm_build; then
         echo "Build done from $i tries!"
         BUILD_DONE=true
         break
