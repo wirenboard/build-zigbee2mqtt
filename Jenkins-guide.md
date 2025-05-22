@@ -48,6 +48,14 @@ Pipline описанный в файле [Jenkinsfile](Jenkinsfile) собира
 - `contactless/devenv:latest` - образ wbdev по дефолту, релизный
 - `contactless/devenv_test:latest` - образ wbdev для тестирования
 
+Обратите внимание что в Jenkinsfile сверху отмечено, что используется нода
+devenv-legacy - это значит что при обновлении devenv, нужно смотреть на
+старую ноду. Это важно, чтобы смотреть изменения на нужной ноде.
+
+```Jenkinsfile
+label 'devenv-legacy'
+```
+
 ## Изменение версии nodejs
 
 Если необходимо поднять версию nodejs, то ее нужно поднимать в двух местах:
