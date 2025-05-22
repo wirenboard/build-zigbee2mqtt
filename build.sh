@@ -2,14 +2,12 @@
 
 NPM_REGISTRY=${NPM_REGISTRY:-}
 FPM_DEPENDS=${FPM_DEPENDS:-"nodejs (>= 22)"}
-USE_TESTING_REPOSITORY=${USE_TESTING_REPOSITORY:-}
 
 if [[ $# -lt 4 ]]; then
     echo >&2 "Usage: $0 <pkg_name> <version> <z2m_dir> <result_dir> [optional fpm flags]"
     echo >&2 "Env used:"
     echo -e >&2 "\tFPM_DEPENDS\tdependencies"
     echo -e >&2 "\tNPM_REGISTRY\tnpm registry address override"
-    echo -e >&2 "\tUSE_TESTING_REPOSITORY\tuse testing repositories if set to 'y'"
     exit 2
 fi
 
@@ -34,34 +32,6 @@ if [[ ! -d "$PROJECT_SUBDIR" ]]; then
 fi
 
 echo "Prepare environment"
-
-echo "Current APT configuration in wirenboard.list:"
-cat /etc/apt/sources.list.d/wirenboard.list || echo "File doesn't exist"
-if [[ "$USE_TESTING_REPOSITORY" == "y" ]]; then
-    echo "Using testing repositories as requested."
-
-    # Detect WB version for select some arch repository
-    if [ -f /etc/apt/sources.list.d/wirenboard.list ]; then
-        current_repo=$(grep -Eo 'wb[0-9]+' /etc/apt/sources.list.d/wirenboard.list)
-    else
-        echo "Cannot detect current WB platform version. File not found."
-        exit 1
-    fi
-
-    if [[ "$current_repo" == "wb6" || "$current_repo" == "wb8" ]]; then
-        echo "Detected platform: $current_repo"
-        echo "Replacing APT source with testing for $current_repo"
-
-        echo "wirenboard.list file already exists, removing it"
-        rm /etc/apt/sources.list.d/wirenboard.list
-
-        echo "Creating new wirenboard.list with testing repo for $current_repo"
-        echo "deb http://deb.wirenboard.com/$current_repo/bullseye testing main" > /etc/apt/sources.list.d/wirenboard.list
-    else
-        echo "Unknown platform version: $current_repo"
-        exit 1
-    fi
-fi
 
 apt-get update
 apt-get install -y git make g++ gcc ruby ruby-dev rubygems build-essential

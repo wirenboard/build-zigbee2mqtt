@@ -5,7 +5,7 @@ pipeline {
         label 'devenv-legacy'
     }
     options {
-        buildDiscarder(logRotator(numToKeepStr: '20', artifactNumToKeepStr: '20'))
+        buildDiscarder(logRotator(numToKeepStr: '30', artifactNumToKeepStr: '30'))
     }
     parameters {
         string(name: 'REPO', defaultValue: 'https://github.com/Koenkk/zigbee2mqtt', description: 'repo to get zigbee2mqtt from')
@@ -111,6 +111,7 @@ pipeline {
         stage('Build') {
             environment {
                 WBDEV_BUILD_METHOD="qemuchroot"
+                WBDEV_USE_UNSTABLE_DEPS='${params.USE_TESTING_REPOSITORY ? 'y' : ''}' \\
 
                 // Initialize params as envvars, workaround for bug https://issues.jenkins-ci.org/browse/JENKINS-41929
                 WBDEV_IMAGE = "${params.WBDEV_IMAGE}"
@@ -128,7 +129,6 @@ pipeline {
                 sh """wbdev chroot bash -c \\
                           "FPM_DEPENDS='${params.FPM_DEPENDS}' \\
                           NPM_REGISTRY='${params.NPM_REGISTRY}' \\
-                          USE_TESTING_REPOSITORY='${params.USE_TESTING_REPOSITORY ? 'y' : ''}' \\
                           ./build.sh ${name} ${VERSION} ${PROJECT_SUBDIR} ${RESULT_SUBDIR} ${specialParams}" """
             }}
             post {
