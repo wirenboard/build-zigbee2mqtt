@@ -4,11 +4,14 @@ pipeline {
     agent {
         label 'devenv-legacy'
     }
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '30', artifactNumToKeepStr: '30'))
+    }
     parameters {
         string(name: 'REPO', defaultValue: 'https://github.com/Koenkk/zigbee2mqtt', description: 'repo to get zigbee2mqtt from')
         string(name: 'BRANCH', defaultValue: 'master', description: 'for checkout step')
-        string(name: 'TAG', defaultValue: '', description: 'use with VERSION_TO_NAME to build custom version')
-        booleanParam(name: 'VERSION_TO_NAME', defaultValue: false, description: 'build package like zigbee2mqtt-1.18.1')
+        string(name: 'TAG', defaultValue: '', description: 'use with VERSION_TO_NAME to build custom version (leave empty for find and use latest tag automatically)')
+        booleanParam(name: 'VERSION_TO_NAME', defaultValue: false, description: 'adds version number to package name as suffix, creating names like zigbee2mqtt-1.18.1')
         booleanParam(name: 'UPLOAD_TO_POOL', defaultValue: false, description: 'disabled by default for repo safety')
         booleanParam(name: 'FORCE_OVERWRITE', defaultValue: false,
                 description: 'use only you know what you are doing, replace existing version of package')
@@ -17,7 +20,10 @@ pipeline {
         string(name: 'WBDEV_IMAGE', defaultValue: 'contactless/devenv:latest',
                 description: 'docker image to use as devenv')
         choice(name: 'WBDEV_TARGET', choices: ['bullseye-armhf', 'bullseye-arm64', 'trixie-armhf', 'trixie-arm64'], description: 'target architecture')
-        choice(name: 'FPM_DEPENDS', choices: ['nodejs (>= 20)', 'nodejs-16'], description: 'zigbee2mqtt dependencies')
+        choice(name: 'FPM_DEPENDS', choices: ['nodejs (>= 22)', 'nodejs-16'],
+                description: 'zigbee2mqtt dependencies - used for build time on Jenkins and then write in control file in deb packet')
+        booleanParam(name: 'USE_TESTING_REPOSITORY', defaultValue: true,
+            description: 'use dependencies from unstable repo if necessary (with lower priority)')
         string(name: 'NPM_REGISTRY', defaultValue: '',
                 description: 'select alternative mirror if necessary, e.g. https://registry.npmjs.org/, http://r.cnpmjs.org/')
     }
@@ -26,21 +32,58 @@ pipeline {
         RESULT_SUBDIR = 'result'
     }
     stages {
+        stage('Initialize build') { steps {
+            script {
+                def repoType = params.USE_TESTING_REPOSITORY ? "testing" : "stable"
+                def buildName = "#${BUILD_NUMBER}:${params.WBDEV_TARGET}/${repoType}"
+                if (params.TAG) {
+                    buildName += " custom_tag=${params.TAG}"
+                }
+                currentBuild.displayName = buildName
+                currentBuild.description = "Build with depend: Node.js ${params.FPM_DEPENDS} for ${params.WBDEV_TARGET}"
+            }
+        }}
         stage('Cleanup workspace') { steps {
             cleanWs deleteDirs: true, patterns: [[pattern: "$RESULT_SUBDIR", type: 'INCLUDE']]
         }}
         stage('Checkout') { steps { dir("$PROJECT_SUBDIR") {
             git branch: params.BRANCH, url: params.REPO
         }}}
+        stage('Find latest tag') {
+            when { expression {
+                params.TAG == ""
+            }}
+            steps { dir("$PROJECT_SUBDIR") { script {
+                sshagent (credentials: ['jenkins-github-public-ssh']) {
+                    sh 'git config --add remote.origin.fetch "+refs/tags/*:refs/tags/*" && git fetch --all'
+                    env.LATEST_TAG = sh(returnStdout: true, script: "git tag --sort=-creatordate | head -n 1").trim()
+                    echo "Found latest tag: ${env.LATEST_TAG}"
+
+                    currentBuild.displayName += " latest_tag=${env.LATEST_TAG}"
+                }
+            }}}
+        }
         stage('Checkout tag') {
             when { expression {
-                (params.TAG != "")
+                (params.TAG != "") || (env.LATEST_TAG != null)
             }}
             steps { dir("$PROJECT_SUBDIR") {
                 sshagent (credentials: ['jenkins-github-public-ssh']) {
                     sh 'git config --add remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*" && git fetch --all'
-                    sh "git checkout ${params.TAG}"
+                    script {
+                        def tagToUse = params.TAG ?: env.LATEST_TAG
+                        echo "Checking out tag: ${tagToUse}"
+                        sh "git checkout ${tagToUse}"
+                    }
                 }
+                sh 'git clean -xdf'
+
+                // FIXME: this output need for catch bug when result
+                //        deb package increase to x2, for example
+                //        normal sise is 27mb, but generate 54mb.
+                //        in big packet we can find pnpm pakages dublicates
+                echo "File list before build start:"
+                sh "ls -lahR --color=auto"
             }}
         }
         stage('Determine version suffix (this repo)') {
@@ -68,6 +111,7 @@ pipeline {
         stage('Build') {
             environment {
                 WBDEV_BUILD_METHOD="qemuchroot"
+                WBDEV_USE_UNSTABLE_DEPS = "${params.USE_TESTING_REPOSITORY ? 'y' : ''}"
 
                 // Initialize params as envvars, workaround for bug https://issues.jenkins-ci.org/browse/JENKINS-41929
                 WBDEV_IMAGE = "${params.WBDEV_IMAGE}"

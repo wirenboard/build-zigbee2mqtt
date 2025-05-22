@@ -1,7 +1,7 @@
 #!/bin/bash -xe
 
 NPM_REGISTRY=${NPM_REGISTRY:-}
-FPM_DEPENDS=${FPM_DEPENDS:-"nodejs (>= 20)"}
+FPM_DEPENDS=${FPM_DEPENDS:-"nodejs (>= 22)"}
 
 if [[ $# -lt 4 ]]; then
     echo >&2 "Usage: $0 <pkg_name> <version> <z2m_dir> <result_dir> [optional fpm flags]"
@@ -11,6 +11,15 @@ if [[ $# -lt 4 ]]; then
     exit 2
 fi
 
+# Call example from wirenboard/build-zigbee2mqtt repo Jenkins branches:
+#   ./build.sh zigbee2mqtt <!VERSION!> zigbee2mqtt result
+# VERSION incert examples:
+# - Build from branch "main" with set TAG = 2.3.0:
+#   "2.3.0-wb101"
+# - Build from custom branch "feature/increase-nodejs-to-22":
+#   "2.1.1-wb101~exp~feature+increase+nodejs+to+22~1~g6f19836"
+# - Build from custom branch "feature/increase-nodejs-to-22" without set TAG and use latest tag:
+#   "2.3.0-2-g9d1427c-wb101~exp~feature+increase+nodejs+to+22~6~gcdf2584"
 PKG_NAME=$1
 VERSION=$2
 PROJECT_SUBDIR=$3
@@ -23,6 +32,10 @@ if [[ ! -d "$PROJECT_SUBDIR" ]]; then
 fi
 
 echo "Prepare environment"
+
+echo "Current APT configuration in wirenboard.list:"
+cat /etc/apt/sources.list.d/wirenboard.list || echo "File doesn't exist"
+
 apt-get update
 apt-get install -y git make g++ gcc ruby ruby-dev rubygems build-essential
 apt-get satisfy -y "$FPM_DEPENDS"
@@ -43,16 +56,23 @@ if [[ "${PKG_NAME}" == "zigbee2mqtt-1.18.1" ]]; then
     sed -i 's#|| ^15#|| ^15 || ^16#' package.json
 fi
 
-npm_build() {
-    pnpm install --frozen-lockfile
+pnpm_build() {
+    pnpm install --frozen-lockfile # install all dependencies include dev
     if [[ $? -ne 0 ]]; then
-        echo "npm ci failed, exiting."
+        echo "pnpm install failed, exiting."
         exit 1
     fi
+
     if [[ "${PKG_NAME}" != "zigbee2mqtt-1.18.1" ]]; then
         pnpm run build  # required only for newer zigbee2mqtt to compile typescript
         if [[ $? -ne 0 ]]; then
-            echo "npm run build failed, exiting."
+            echo "pnpm run build failed, exiting."
+            exit 1
+        fi
+
+        pnpm prune --prod # remove devDependencies for minimise result size
+        if [[ $? -ne 0 ]]; then
+            echo "pnpm prune failed, exiting."
             exit 1
         fi
     fi
@@ -60,7 +80,7 @@ npm_build() {
 
 BUILD_DONE=false
 for i in {1..5}; do
-    if npm_build; then
+    if pnpm_build; then
         echo "Build done from $i tries!"
         BUILD_DONE=true
         break
@@ -88,6 +108,7 @@ fpm --input-type dir \
     --name "$PKG_NAME" \
     --version "$VERSION" \
     --exclude 'mnt/data/root/zigbee2mqtt/.git*' \
+    --exclude 'mnt/data/root/zigbee2mqtt/.git/**' \
     --config-files mnt/data/root/zigbee2mqtt/data/configuration.yaml \
     --deb-no-default-config-files \
     --deb-systemd package/zigbee2mqtt.service \
