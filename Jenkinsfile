@@ -111,7 +111,7 @@ pipeline {
         stage('Build') {
             environment {
                 WBDEV_BUILD_METHOD="qemuchroot"
-                WBDEV_USE_UNSTABLE_DEPS='${params.USE_TESTING_REPOSITORY ? 'y' : ''}' \\
+                WBDEV_USE_UNSTABLE_DEPS='${params.USE_TESTING_REPOSITORY ? 'y' : ''}'
 
                 // Initialize params as envvars, workaround for bug https://issues.jenkins-ci.org/browse/JENKINS-41929
                 WBDEV_IMAGE = "${params.WBDEV_IMAGE}"
