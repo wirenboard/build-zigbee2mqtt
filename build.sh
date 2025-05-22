@@ -33,6 +33,9 @@ fi
 
 echo "Prepare environment"
 
+echo "Current APT configuration in wirenboard.list:"
+cat /etc/apt/sources.list.d/wirenboard.list || echo "File doesn't exist"
+
 apt-get update
 apt-get install -y git make g++ gcc ruby ruby-dev rubygems build-essential
 apt-get satisfy -y "$FPM_DEPENDS"
