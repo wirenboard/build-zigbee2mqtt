@@ -4,7 +4,7 @@ CONFIG_FILE=/mnt/data/root/zigbee2mqtt/data/configuration.yaml
 
 echo "Adding dependencies for pnpm"
 # Dependencies already included in .deb — this just prevents runtime issues
-pnpm install --prod --frozen-lockfile --prefix /mnt/data/root/zigbee2mqtt
+pnpm install --prod --frozen-lockfile --force --prefix /mnt/data/root/zigbee2mqtt
 
 if [ -e "$CONFIG_FILE.wb-old" ]; then
     echo "Restoring config file after upgrade from old malformed zigbee2mqtt package version"
