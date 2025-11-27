@@ -94,7 +94,7 @@ pipeline {
                 sshagent (credentials: ['jenkins-github-public-ssh']) {
                     sh 'git config --add remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*" && git fetch --all'
                 }
-                env.WB_VERSION_SUFFIX = wb.makeVersionSuffixFromBranch()
+                env.WB_VERSION_SUFFIX = wb.makeVersionSuffixFromBranch(wb.getMainBranchName())
             }}
         }
         stage('Determine version') {
