@@ -110,6 +110,8 @@ fpm --input-type dir \
     --exclude 'mnt/data/root/zigbee2mqtt/.git*' \
     --exclude 'mnt/data/root/zigbee2mqtt/.git/**' \
     --config-files mnt/data/root/zigbee2mqtt/data/configuration.yaml \
+    --deb-dist stable \
+    --deb-generate-changes \
     --deb-no-default-config-files \
     --deb-systemd package/zigbee2mqtt.service \
     --deb-systemd-auto-start \
