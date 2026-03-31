@@ -114,7 +114,7 @@ fpm --input-type dir \
     --deb-systemd package/zigbee2mqtt.service \
     --deb-systemd-auto-start \
     --deb-systemd-enable \
-    --deb-recommends wb-zigbee2mqtt \
+    --deb-recommends wb-mqtt-zigbee \
     --maintainer 'Wiren Board Robot <info@wirenboard.com>' \
     --description 'Zigbee to MQTT bridge (package by Wiren Board team)' \
     --url 'https://www.zigbee2mqtt.io/' \
