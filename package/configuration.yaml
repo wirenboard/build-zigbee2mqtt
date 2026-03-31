@@ -11,6 +11,12 @@ advanced:
   last_seen: epoch
   pan_id: GENERATE
   network_key: GENERATE
+availability:
+  enabled: true
+  active:
+    timeout: 10
+    max_jitter: 30000
+    backoff: true
 #frontend:
 #  port: 8081
 #  host: 0.0.0.0
