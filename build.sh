@@ -42,6 +42,10 @@ apt-get satisfy -y "$FPM_DEPENDS"
 gem install --no-document fpm -v 1.16.0
 
 corepack enable pnpm
+# Workaround: corepack enable creates a broken shim in some environments
+# Always replace the shim with a wrapper to ensure it works correctly
+printf '#!/bin/sh\nexec corepack pnpm "$@"\n' >/usr/bin/pnpm
+chmod +x /usr/bin/pnpm
 
 if [[ -n "$NPM_REGISTRY" ]]; then
     echo "Override NPM registry"
@@ -114,7 +118,7 @@ fpm --input-type dir \
     --deb-systemd package/zigbee2mqtt.service \
     --deb-systemd-auto-start \
     --deb-systemd-enable \
-    --deb-recommends wb-zigbee2mqtt \
+	--deb-recommends 'wb-mqtt-zigbee | wb-zigbee2mqtt' \
     --maintainer 'Wiren Board Robot <info@wirenboard.com>' \
     --description 'Zigbee to MQTT bridge (package by Wiren Board team)' \
     --url 'https://www.zigbee2mqtt.io/' \

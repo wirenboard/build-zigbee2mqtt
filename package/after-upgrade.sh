@@ -26,3 +26,15 @@ if ! grep -Pzq 'serial:\n(  .*\n)*  adapter: zstack' $CONFIG_FILE; then
   fi
   echo "zstack adapter type added to the configuration file"
 fi
+
+if ! grep -q '^availability:' "$CONFIG_FILE"; then
+  cat >> "$CONFIG_FILE" <<'EOF'
+availability:
+  enabled: true
+  active:
+    timeout: 10
+    max_jitter: 30000
+    backoff: true
+EOF
+  echo "availability section added to the configuration file"
+fi
