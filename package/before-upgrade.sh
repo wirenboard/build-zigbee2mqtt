@@ -1,15 +1,12 @@
 #!/bin/sh
 
-# In older zigbee2mqtt package builds data/configuration.yaml file
-# is not marked as conffile so it is not preserved during upgrade.
-# This script saves old configuration during upgrade from this
-# malformed version.
-
 CONFIG_FILE=/mnt/data/root/zigbee2mqtt/data/configuration.yaml
 
-if ! dpkg-query --showformat='\${Conffiles}' --show 'zigbee2mqtt*' | grep configuration.yaml >/dev/null; then
-    echo "Saving modified config file from old malformed zigbee2mqtt package"
-    mv $CONFIG_FILE $CONFIG_FILE.wb-old
+# Always backup configuration before upgrade to preserve user settings
+# (network_key, pan_id, devices, etc.)
+if [ -e "$CONFIG_FILE" ]; then
+    echo "Saving configuration file before upgrade"
+    cp "$CONFIG_FILE" "$CONFIG_FILE.wb-upgrade-backup"
 fi
 
 if ! command -v pnpm &> /dev/null; then
