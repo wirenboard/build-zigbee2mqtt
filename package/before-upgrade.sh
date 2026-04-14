@@ -2,11 +2,11 @@
 
 CONFIG_FILE=/mnt/data/root/zigbee2mqtt/data/configuration.yaml
 
-# configuration.yaml was previously marked as dpkg conffile, but on upgrade
-# dpkg prompts the user to replace or keep the modified config. Users often
-# press Y (replace) accidentally, which overwrites network_key, pan_id and
-# paired devices — effectively destroying the zigbee network.
-# So we removed the conffile mark and handle backup/restore ourselves.
+# configuration.yaml is marked as dpkg conffile, so on upgrade dpkg may
+# prompt the user to replace or keep the modified config. If the user
+# presses Y (replace), it would overwrite network_key, pan_id and paired
+# devices — effectively destroying the zigbee network.
+# As a safety net, we always backup the config and restore it after upgrade.
 if [ -e "$CONFIG_FILE" ]; then
     echo "Saving configuration file before upgrade"
     cp "$CONFIG_FILE" "$CONFIG_FILE.wb-old"
