@@ -6,7 +6,7 @@ CONFIG_FILE=/mnt/data/root/zigbee2mqtt/data/configuration.yaml
 # (network_key, pan_id, devices, etc.)
 if [ -e "$CONFIG_FILE" ]; then
     echo "Saving configuration file before upgrade"
-    cp "$CONFIG_FILE" "$CONFIG_FILE.wb-upgrade-backup"
+    cp "$CONFIG_FILE" "$CONFIG_FILE.wb-old"
 fi
 
 if ! command -v pnpm &> /dev/null; then

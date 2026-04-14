@@ -7,14 +7,8 @@ echo "Adding dependencies for pnpm"
 pnpm install --prod --frozen-lockfile --force --prefix /mnt/data/root/zigbee2mqtt
 
 # Restore user configuration saved before upgrade
-if [ -e "$CONFIG_FILE.wb-upgrade-backup" ]; then
-    echo "Restoring configuration file after upgrade"
-    mv "$CONFIG_FILE.wb-upgrade-backup" "$CONFIG_FILE"
-fi
-
-# Legacy: restore config from old malformed package (without conffile mark)
 if [ -e "$CONFIG_FILE.wb-old" ]; then
-    echo "Restoring config file after upgrade from old malformed zigbee2mqtt package version"
+    echo "Restoring configuration file after upgrade"
     mv "$CONFIG_FILE.wb-old" "$CONFIG_FILE"
 fi
 
