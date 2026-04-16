@@ -9,7 +9,10 @@ CONFIG_FILE=/mnt/data/root/zigbee2mqtt/data/configuration.yaml
 # As a safety net, we always backup the config and restore it after upgrade.
 if [ -e "$CONFIG_FILE" ]; then
     echo "Saving configuration file before upgrade"
-    cp "$CONFIG_FILE" "$CONFIG_FILE.wb-old"
+    if ! cp "$CONFIG_FILE" "$CONFIG_FILE.wb-old"; then
+        echo "Failed to back up $CONFIG_FILE — aborting upgrade" >&2
+        exit 1
+    fi
 fi
 
 if ! command -v pnpm &> /dev/null; then
