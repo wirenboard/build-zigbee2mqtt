@@ -15,7 +15,7 @@ if [ -e "$CONFIG_FILE" ]; then
     fi
 fi
 
-if ! command -v pnpm &> /dev/null; then
+if ! command -v pnpm >/dev/null 2>&1; then
     echo "pnpm is not installed. Install via corepack..."
     corepack enable pnpm
 fi
