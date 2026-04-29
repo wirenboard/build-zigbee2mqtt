@@ -2,14 +2,18 @@
 
 CONFIG_FILE=/mnt/data/root/zigbee2mqtt/data/configuration.yaml
 
+# Restore user configuration saved before upgrade.
+# Done first so that the config is safe even if a later step (pnpm install) fails;
+# successful mv also removes .wb-old, preventing a stale backup from leaking
+# into the next upgrade.
+if [ -e "$CONFIG_FILE.wb-old" ]; then
+    echo "Restoring configuration file after upgrade"
+    mv "$CONFIG_FILE.wb-old" "$CONFIG_FILE"
+fi
+
 echo "Adding dependencies for pnpm"
 # Dependencies already included in .deb — this just prevents runtime issues
 pnpm install --prod --frozen-lockfile --force --prefix /mnt/data/root/zigbee2mqtt
-
-if [ -e "$CONFIG_FILE.wb-old" ]; then
-    echo "Restoring config file after upgrade from old malformed zigbee2mqtt package version"
-    mv $CONFIG_FILE.wb-old $CONFIG_FILE
-fi
 
 if ! grep -Pzq 'serial:\n(  .*\n)*  adapter: zstack' $CONFIG_FILE; then
   LINE=$(awk '
