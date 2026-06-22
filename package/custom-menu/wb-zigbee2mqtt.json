@@ -1,0 +1,15 @@
+{
+  "id": "integrations",
+  "children": [
+    {
+      "id": "zigbee2mqtt",
+      "url": "/zigbee2mqtt/",
+      "isExternal": true,
+      "openInNewTab": true,
+      "title": {
+        "ru": "Zigbee2MQTT",
+        "en": "Zigbee2MQTT"
+      }
+    }
+  ]
+}

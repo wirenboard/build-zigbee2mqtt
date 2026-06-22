@@ -17,6 +17,12 @@ availability:
     timeout: 10
     max_jitter: 30000
     backoff: true
-#frontend:
-#  port: 8081
-#  host: 0.0.0.0
+frontend:
+  enabled: true
+  # Loopback only: the frontend is never exposed directly. Public access goes
+  # through nginx (default.wb.d/wb-zigbee2mqtt.conf), gated by the homeui session.
+  host: 127.0.0.1
+  port: 8081
+  # Served under a subpath behind nginx (same origin as homeui), so the UI and
+  # its /api websocket live under /zigbee2mqtt/.
+  base_url: /zigbee2mqtt

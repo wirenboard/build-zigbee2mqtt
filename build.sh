@@ -126,8 +126,14 @@ fpm --input-type dir \
     --depends "$FPM_DEPENDS" \
     --before-upgrade package/before-upgrade.sh \
     --after-upgrade package/after-upgrade.sh \
+    --after-install package/after-install.sh \
+    --after-remove package/after-remove.sh \
     --package "$RESULT_SUBDIR/result.deb" \
     "$@" \
+    package/wb-homeui-integration.sh=/usr/share/zigbee2mqtt/wb-homeui-integration.sh \
+    package/nginx/wb-zigbee2mqtt.conf=/usr/share/zigbee2mqtt/nginx/wb-zigbee2mqtt.conf \
+    package/nginx/wb-zigbee2mqtt-auth-cache.conf=/usr/share/zigbee2mqtt/nginx/wb-zigbee2mqtt-auth-cache.conf \
+    package/custom-menu/wb-zigbee2mqtt.json=/usr/share/zigbee2mqtt/custom-menu/wb-zigbee2mqtt.json \
     "$PROJECT_SUBDIR"=/mnt/data/root
 
 dpkg-name "$RESULT_SUBDIR/result.deb"

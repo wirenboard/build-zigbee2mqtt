@@ -42,3 +42,10 @@ availability:
 EOF
   echo "availability section added to the configuration file"
 fi
+
+# Place the homeui integration (nginx gate + custom-menu entry) on upgrade too:
+# fpm runs after-upgrade (not after-install) when a previous version was
+# configured, so this path must (re)place it as well. Failures here must not
+# abort the upgrade.
+HELPER=/usr/share/zigbee2mqtt/wb-homeui-integration.sh
+[ -f "$HELPER" ] && sh "$HELPER" || true
