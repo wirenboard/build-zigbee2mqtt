@@ -1,7 +1,7 @@
 [Unit]
 Description=zigbee2mqtt
 After=network.target mosquitto.service
-BindsTo=mosquitto.service
+Wants=mosquitto.service
 
 [Service]
 ExecStart=/usr/bin/npm start
