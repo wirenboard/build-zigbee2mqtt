@@ -2,7 +2,7 @@
 
 pipeline {
     agent {
-        label 'devenv-legacy'
+        label "${params.BUILD_NODE}"
     }
     options {
         buildDiscarder(logRotator(numToKeepStr: '30', artifactNumToKeepStr: '30'))
@@ -17,15 +17,15 @@ pipeline {
                 description: 'use only you know what you are doing, replace existing version of package')
         booleanParam(name: 'ADD_VERSION_SUFFIX', defaultValue: true, description: 'for dev branches only')
         string(name: 'WB_REVISION', defaultValue: '-wb101', description: 'for rebuilds, like -wb101')
-        string(name: 'WBDEV_IMAGE', defaultValue: 'contactless/devenv:latest',
-                description: 'docker image to use as devenv')
-        choice(name: 'WBDEV_TARGET', choices: ['bullseye-armhf', 'bullseye-arm64', 'trixie-armhf', 'trixie-arm64'], description: 'target architecture')
+        string(name: 'WBDEV_IMAGE', defaultValue: '', description: 'docker image to use as devenv')
+        choice(name: 'WBDEV_TARGET', choices: ['trixie-armhf', 'trixie-arm64', 'bullseye-armhf', 'bullseye-arm64'], description: 'target architecture')
         choice(name: 'FPM_DEPENDS', choices: ['nodejs (>= 22)', 'nodejs-16'],
                 description: 'zigbee2mqtt dependencies - used for build time on Jenkins and then write in control file in deb packet')
         booleanParam(name: 'USE_TESTING_REPOSITORY', defaultValue: true,
             description: 'use dependencies from unstable repo if necessary (with lower priority)')
         string(name: 'NPM_REGISTRY', defaultValue: '',
                 description: 'select alternative mirror if necessary, e.g. https://registry.npmjs.org/, http://r.cnpmjs.org/')
+        string(name: 'BUILD_NODE', defaultValue: 'devenv', description: 'build node label to use')
     }
     environment {
         PROJECT_SUBDIR = 'zigbee2mqtt'
@@ -114,7 +114,7 @@ pipeline {
                 WBDEV_USE_UNSTABLE_DEPS = "${params.USE_TESTING_REPOSITORY ? 'y' : ''}"
 
                 // Initialize params as envvars, workaround for bug https://issues.jenkins-ci.org/browse/JENKINS-41929
-                WBDEV_IMAGE = "${params.WBDEV_IMAGE}"
+                WBDEV_IMAGE = "${params.WBDEV_IMAGE ?: (params.WBDEV_TARGET.startsWith('trixie') ? 'contactless/devenv:latest' : 'contactless/devenv:latest_bullseye')}"
                 WBDEV_TARGET = "${params.WBDEV_TARGET}"
             }
             steps { script {
