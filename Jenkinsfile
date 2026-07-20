@@ -114,7 +114,7 @@ pipeline {
                 WBDEV_USE_UNSTABLE_DEPS = "${params.USE_TESTING_REPOSITORY ? 'y' : ''}"
 
                 // Initialize params as envvars, workaround for bug https://issues.jenkins-ci.org/browse/JENKINS-41929
-                WBDEV_IMAGE = "${params.WBDEV_IMAGE ?: (params.WBDEV_TARGET.startsWith('trixie') ? 'contactless/devenv:latest' : 'contactless/devenv:latest_bullseye')}"
+                WBDEV_IMAGE = "${params.WBDEV_IMAGE ?: (params.WBDEV_TARGET.startsWith('bullseye') ? 'contactless/devenv:latest_bullseye' : 'contactless/devenv:latest')}"
                 WBDEV_TARGET = "${params.WBDEV_TARGET}"
             }
             steps { script {
