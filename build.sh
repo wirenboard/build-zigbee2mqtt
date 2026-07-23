@@ -39,7 +39,7 @@ cat /etc/apt/sources.list.d/wirenboard.list || echo "File doesn't exist"
 apt-get update
 apt-get install -y git make g++ gcc ruby ruby-dev rubygems build-essential
 apt-get satisfy -y "$FPM_DEPENDS"
-gem install --no-document fpm -v 1.16.0
+gem install --no-document fpm -v 1.18.0
 
 corepack enable pnpm
 # Workaround: corepack enable creates a broken shim in some environments
@@ -114,6 +114,8 @@ fpm --input-type dir \
     --exclude 'mnt/data/root/zigbee2mqtt/.git*' \
     --exclude 'mnt/data/root/zigbee2mqtt/.git/**' \
     --config-files mnt/data/root/zigbee2mqtt/data/configuration.yaml \
+    --deb-dist stable \
+    --deb-generate-changes \
     --deb-no-default-config-files \
     --deb-systemd package/zigbee2mqtt.service \
     --deb-systemd-auto-start \
@@ -126,6 +128,7 @@ fpm --input-type dir \
     --depends "$FPM_DEPENDS" \
     --before-upgrade package/before-upgrade.sh \
     --after-upgrade package/after-upgrade.sh \
+    --deb-after-purge package/after-purge.sh \
     --package "$RESULT_SUBDIR/result.deb" \
     "$@" \
     "$PROJECT_SUBDIR"=/mnt/data/root
