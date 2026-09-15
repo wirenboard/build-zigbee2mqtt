@@ -65,21 +65,21 @@ fi
 pnpm_build() {
     pnpm install --frozen-lockfile # install all dependencies include dev
     if [[ $? -ne 0 ]]; then
-        echo "pnpm install failed, exiting."
-        exit 1
+        echo "pnpm install failed."
+        return 1
     fi
 
     if [[ "${PKG_NAME}" != "zigbee2mqtt-1.18.1" ]]; then
         pnpm run build  # required only for newer zigbee2mqtt to compile typescript
         if [[ $? -ne 0 ]]; then
-            echo "pnpm run build failed, exiting."
-            exit 1
+            echo "pnpm run build failed."
+            return 1
         fi
 
         pnpm prune --prod # remove devDependencies for minimise result size
         if [[ $? -ne 0 ]]; then
-            echo "pnpm prune failed, exiting."
-            exit 1
+            echo "pnpm prune failed."
+            return 1
         fi
     fi
 }

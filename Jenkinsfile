@@ -18,14 +18,13 @@ pipeline {
         string(name: 'WBDEV_TESTING_SETS', defaultValue: '',
                 description: 'Comma-separated testing set names: their experimental.<name> repositories are added to the rootfs above testing and unstable, so packages from them win. Trixie targets only, not with UPLOAD_TO_POOL')
         choice(name: 'WBDEV_TARGET', choices: ['trixie-armhf', 'trixie-arm64', 'bullseye-armhf', 'bullseye-arm64'], description: 'Target architecture')
-        // The dependency is the text before ':'; after it, a note for the form.
         // Node 24 has an upper bound: the native module unix-dgram in the package is compiled for the ABI
         // of the Node it was built with (NODE_MODULE_VERSION 137 for 24.x) and does not load on another major.
         choice(name: 'FPM_DEPENDS',
-                choices: ['nodejs (>= 22)', 'nodejs (>= 24), nodejs (<< 25): upper bound for the unix-dgram native module ABI', 'nodejs-16'],
+                choices: ['nodejs (>= 22)', 'nodejs (>= 24), nodejs (<< 25)', 'nodejs-16'],
                 description: '''Node.js installed for the build and written to Depends of the package:
 - nodejs (>= 22) (default): Node 22 from the Wiren Board repositories, trixie and bullseye
-- nodejs (>= 24), nodejs (<< 25): Node 24, trixie only; until it is in the repositories, only from WBDEV_TESTING_SETS
+- nodejs (>= 24), nodejs (<< 25): Node 24, trixie only; the upper bound is for the ABI of the unix-dgram native module. Until Node 24 is in the repositories, only from WBDEV_TESTING_SETS
 - nodejs-16: for zigbee2mqtt-1.18.1''')
         booleanParam(name: 'USE_TESTING_REPOSITORY', defaultValue: true,
             description: 'Use dependencies from unstable repo if necessary (with lower priority)')
@@ -61,9 +60,8 @@ pipeline {
                     }
                 }
 
-                env.PACKAGE_DEPENDS = params.FPM_DEPENDS.split(':')[0].trim()
-                if (params.WBDEV_TARGET.startsWith('bullseye') && env.PACKAGE_DEPENDS.contains('>= 24')) {
-                    error("FPM_DEPENDS='${env.PACKAGE_DEPENDS}' for ${params.WBDEV_TARGET}: Node.js 24 needs glibc 2.38, bullseye has 2.31")
+                if (params.WBDEV_TARGET.startsWith('bullseye') && params.FPM_DEPENDS.contains('>= 24')) {
+                    error("FPM_DEPENDS='${params.FPM_DEPENDS}' for ${params.WBDEV_TARGET}: Node.js 24 needs glibc 2.38, bullseye has 2.31")
                 }
 
                 def repoType = params.USE_TESTING_REPOSITORY ? "testing" : "stable"
@@ -71,7 +69,7 @@ pipeline {
                 if (params.TAG) {
                     buildName += " custom_tag=${params.TAG}"
                 }
-                def description = "Build with depend: ${env.PACKAGE_DEPENDS} for ${params.WBDEV_TARGET}"
+                def description = "Build with depend: ${params.FPM_DEPENDS} for ${params.WBDEV_TARGET}"
 
                 def testingSets = params.WBDEV_TESTING_SETS.trim()
                 if (testingSets) {
@@ -174,7 +172,7 @@ pipeline {
                 sh "printenv | sort"
                 sh "wbdev root printenv | sort"
                 sh """wbdev chroot bash -c \\
-                          "FPM_DEPENDS='${env.PACKAGE_DEPENDS}' \\
+                          "FPM_DEPENDS='${params.FPM_DEPENDS}' \\
                           NPM_REGISTRY='${params.NPM_REGISTRY}' \\
                           ./build.sh ${name} ${VERSION} ${PROJECT_SUBDIR} ${RESULT_SUBDIR} ${specialParams}" """
             }}
