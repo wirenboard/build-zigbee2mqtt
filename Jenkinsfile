@@ -2,8 +2,7 @@
 
 pipeline {
     agent {
-        // The first build after the rename still has BUILD_NODE and no BUILD_NODE_LABEL.
-        label "${params.BUILD_NODE_LABEL ?: params.BUILD_NODE ?: 'devenv'}"
+        label "${params.BUILD_NODE_LABEL}"
     }
     options {
         buildDiscarder(logRotator(numToKeepStr: '30', artifactNumToKeepStr: '30'))
@@ -13,9 +12,6 @@ pipeline {
         string(name: 'BRANCH', defaultValue: 'master', description: 'for checkout step')
         string(name: 'TAG', defaultValue: '', description: 'use with VERSION_TO_NAME to build custom version (leave empty for find and use latest tag automatically)')
         booleanParam(name: 'VERSION_TO_NAME', defaultValue: false, description: 'adds version number to package name as suffix, creating names like zigbee2mqtt-1.18.1')
-        booleanParam(name: 'UPLOAD_TO_POOL', defaultValue: false, description: 'disabled by default for repo safety')
-        booleanParam(name: 'FORCE_OVERWRITE', defaultValue: false,
-                description: 'use only you know what you are doing, replace existing version of package')
         booleanParam(name: 'ADD_VERSION_SUFFIX', defaultValue: true, description: 'for dev branches only')
         string(name: 'WB_REVISION', defaultValue: '-wb101', description: 'for rebuilds, like -wb101')
         string(name: 'WBDEV_IMAGE', defaultValue: '', description: 'docker image to use as devenv')
@@ -30,10 +26,13 @@ pipeline {
                 description: 'select alternative mirror if necessary, e.g. https://registry.npmjs.org/, http://r.cnpmjs.org/')
         choice(name: 'BUILD_NODE_LABEL',
                 choices: ['devenv', 'heavy-duty'],
-                description: '''which build machines run this build. A Jenkins label, not a machine name: any free machine with it is used.
-
-  devenv      the default: 16 cores, 31 GB, the machines regular Wiren Board package builds use
-  heavy-duty  24 cores, 115 GB''')
+                description: '''build machines: a Jenkins label, any free machine with it is used:
+- devenv (default): 16 cores, 31 GB, the machines regular Wiren Board package builds use
+- heavy-duty: 24 cores, 115 GB''')
+        booleanParam(name: 'UPLOAD_TO_POOL', defaultValue: false,
+                description: 'upload the .deb to the apt pool at the end of the build. Off by default to keep the pool safe. Not with WBDEV_TESTING_SETS')
+        booleanParam(name: 'FORCE_OVERWRITE', defaultValue: false,
+                description: 'with UPLOAD_TO_POOL: replace the same version already in the pool')
     }
     environment {
         PROJECT_SUBDIR = 'zigbee2mqtt'
