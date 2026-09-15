@@ -64,22 +64,58 @@ Pipline описанный в файле [Jenkinsfile](Jenkinsfile) собира
 
 В поле WBDEV_IMAGE можно писать:
 
-- `contactless/devenv:latest` - образ wbdev по дефолту, релизный
-- `contactless/devenv_test:latest` - образ wbdev для тестирования
+- пусто - по умолчанию, образ выбирается по `WBDEV_TARGET`
+- `contactless/devenv:latest` - релизный образ для `trixie-*`
+- `contactless/devenv:latest_bullseye` - релизный образ для `bullseye-*`
+- `registry.wirenboard.com/wirenboard/devenv_test:latest` - образ для\
+  тестирования, его собирает джоба `docker-image-build`
 
-Обратите внимание что в Jenkinsfile сверху отмечено, что используется нода\
-`devenv-legacy` - это значит что при обновлении devenv, нужно смотреть на\
-старую ноду, а не на актуальную ноду с именем`devenv`. Это важно, чтобы\
-смотреть изменения на нужной ноде.
+### WBDEV_TESTING_SETS
 
-```Jenkinsfile
-label 'devenv-legacy'
+Список testing sets через запятую. Для каждого набора `wbdev chroot` добавляет\
+в rootfs репозиторий `experimental.<набор>` из `http://deb.wirenboard.com/all`\
+с приоритетом 991 - выше testing (990) и unstable (500), поэтому пакеты из\
+набора выигрывают. Так можно собрать z2m на Node.js, который лежит только в\
+testing set, - проверить новую версию, не выкладывая её для всех.
+
+Сборка останавливается:
+
+- если имя набора неверное или такого набора нет в репозитории - это проверяет\
+  сам wbdev (`devenv/entrypoint.sh`, функция `write_rootfs_apt_sources`)
+- если включён `UPLOAD_TO_POOL` - пакет, собранный на пакетах из testing set,\
+  в пул не выкладывается
+- если цель `bullseye-*`, а `WBDEV_IMAGE` пустой - образ\
+  `contactless/devenv:latest_bullseye` старше 15.09.2026 и в `wbdev chroot`\
+  наборы не подключает
+
+Другой образ старше 15.09.2026, указанный в `WBDEV_IMAGE`, наборы молча\
+пропустит, и сборка пройдёт на обычных пакетах.
+
+Наборы видны в имени сборки (`testing_sets=...`). Какой Node.js реально взят и\
+из какого репозитория, видно в логе после строки:
+
+```
+Node.js in the rootfs for this build: installed version and the repository it came from
 ```
 
-Причина использования `devenv-legacy` в том что была проблема при которой\
-z2m 1.18 не собирался на devenv поэтому используем devenv-legacy - там старый\
-devenv. Изначально проблема была в версии докера и qemu, на devenv-legacy они\
-остались старые.
+У установленной версии стоит `***`, приоритет 991 значит testing set, 500 - unstable.
+
+### BUILD_NODE_LABEL
+
+Задаёт не машину, а метку машин Jenkins: сборка идёт на любой свободной машине\
+с этой меткой. Выбор из двух:
+
+- `devenv` - по умолчанию: `build-node-1-vm` и `build-node-2-vm`
+- `heavy-duty` - `build-powerhouse-vm`
+
+Примечание про метку `devenv-legacy`. С 26.06.2024\
+([#11](https://github.com/wirenboard/build-zigbee2mqtt/pull/11)) в Jenkinsfile\
+жёстко стояло `label 'devenv-legacy'`: z2m 1.18 не собирался на `devenv`, а на\
+машинах `devenv-legacy` оставался старый devenv со старыми версиями docker и qemu.\
+20.07.2026 коммит `80323e7` ([#25](https://github.com/wirenboard/build-zigbee2mqtt/pull/25))\
+заменил жёсткую метку параметром, по умолчанию `devenv`. На 15.09.2026 машин с\
+меткой `devenv-legacy` в Jenkins нет, так что если снова понадобится собрать\
+z2m 1.18, начинать придётся с этого.
 
 ## Изменение версии nodejs
 

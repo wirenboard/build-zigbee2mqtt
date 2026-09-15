@@ -2,7 +2,8 @@
 
 pipeline {
     agent {
-        label "${params.BUILD_NODE}"
+        // The first build after the rename still has BUILD_NODE and no BUILD_NODE_LABEL.
+        label "${params.BUILD_NODE_LABEL ?: params.BUILD_NODE ?: 'devenv'}"
     }
     options {
         buildDiscarder(logRotator(numToKeepStr: '30', artifactNumToKeepStr: '30'))
@@ -18,6 +19,8 @@ pipeline {
         booleanParam(name: 'ADD_VERSION_SUFFIX', defaultValue: true, description: 'for dev branches only')
         string(name: 'WB_REVISION', defaultValue: '-wb101', description: 'for rebuilds, like -wb101')
         string(name: 'WBDEV_IMAGE', defaultValue: '', description: 'docker image to use as devenv')
+        string(name: 'WBDEV_TESTING_SETS', defaultValue: '',
+                description: 'comma-separated testing set names: their experimental.<name> repositories are added to the rootfs above testing and unstable, so packages from them win. Trixie targets only, not with UPLOAD_TO_POOL')
         choice(name: 'WBDEV_TARGET', choices: ['trixie-armhf', 'trixie-arm64', 'bullseye-armhf', 'bullseye-arm64'], description: 'target architecture')
         choice(name: 'FPM_DEPENDS', choices: ['nodejs (>= 22)', 'nodejs-16'],
                 description: 'zigbee2mqtt dependencies - used for build time on Jenkins and then write in control file in deb packet')
@@ -25,7 +28,12 @@ pipeline {
             description: 'use dependencies from unstable repo if necessary (with lower priority)')
         string(name: 'NPM_REGISTRY', defaultValue: '',
                 description: 'select alternative mirror if necessary, e.g. https://registry.npmjs.org/, http://r.cnpmjs.org/')
-        string(name: 'BUILD_NODE', defaultValue: 'devenv', description: 'build node label to use')
+        choice(name: 'BUILD_NODE_LABEL',
+                choices: ['devenv', 'heavy-duty'],
+                description: '''which build machines run this build. A Jenkins label, not a machine name: any free machine with it is used.
+
+  devenv      the default: 16 cores, 31 GB, the machines regular Wiren Board package builds use
+  heavy-duty  24 cores, 115 GB''')
     }
     environment {
         PROJECT_SUBDIR = 'zigbee2mqtt'
@@ -34,13 +42,41 @@ pipeline {
     stages {
         stage('Initialize build') { steps {
             script {
+                // These values go into shell command lines: allow only what they legitimately contain.
+                def formats = [
+                    TAG:          /^[A-Za-z0-9._\/+-]*$/,
+                    WB_REVISION:  /^-wb\d+$/,
+                    WBDEV_IMAGE:  /^[A-Za-z0-9._\/:@-]*$/,
+                    NPM_REGISTRY: /^(https?:\/\/[A-Za-z0-9._~:\/@%+-]+)?$/,
+                ]
+                formats.each { name, format ->
+                    if (!("${params[name]}" ==~ format)) {
+                        error("${name}='${params[name]}' does not match ${format}.")
+                    }
+                }
+
                 def repoType = params.USE_TESTING_REPOSITORY ? "testing" : "stable"
                 def buildName = "#${BUILD_NUMBER}:${params.WBDEV_TARGET}/${repoType}"
                 if (params.TAG) {
                     buildName += " custom_tag=${params.TAG}"
                 }
+                def description = "Build with depend: Node.js ${params.FPM_DEPENDS} for ${params.WBDEV_TARGET}"
+
+                // null on the first build after the parameter appeared
+                def testingSets = (params.WBDEV_TESTING_SETS ?: '').trim()
+                if (testingSets) {
+                    if (params.UPLOAD_TO_POOL) {
+                        error("WBDEV_TESTING_SETS='${testingSets}' with UPLOAD_TO_POOL: a package built against testing sets must not go to the pool")
+                    }
+                    // Names and missing sets are checked by devenv itself; images before 15.09.2026 silently ignore the sets in wbdev chroot.
+                    if (params.WBDEV_TARGET.startsWith('bullseye') && !params.WBDEV_IMAGE) {
+                        error("WBDEV_TESTING_SETS: contactless/devenv:latest_bullseye used for ${params.WBDEV_TARGET} does not add testing sets in wbdev chroot")
+                    }
+                    buildName += " testing_sets=${testingSets}"
+                    description += ", testing sets: ${testingSets}"
+                }
                 currentBuild.displayName = buildName
-                currentBuild.description = "Build with depend: Node.js ${params.FPM_DEPENDS} for ${params.WBDEV_TARGET}"
+                currentBuild.description = description
             }
         }}
         stage('Cleanup workspace') { steps {
@@ -116,6 +152,7 @@ pipeline {
                 // Initialize params as envvars, workaround for bug https://issues.jenkins-ci.org/browse/JENKINS-41929
                 WBDEV_IMAGE = "${params.WBDEV_IMAGE ?: (params.WBDEV_TARGET.startsWith('bullseye') ? 'contactless/devenv:latest_bullseye' : 'contactless/devenv:latest')}"
                 WBDEV_TARGET = "${params.WBDEV_TARGET}"
+                WBDEV_TESTING_SETS = "${params.WBDEV_TESTING_SETS ?: ''}"
             }
             steps { script {
                 def name = params.VERSION_TO_NAME ? "zigbee2mqtt-${PURE_VERSION}" : "zigbee2mqtt";

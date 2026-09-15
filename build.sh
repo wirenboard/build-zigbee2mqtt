@@ -39,6 +39,8 @@ cat /etc/apt/sources.list.d/wirenboard.list || echo "File doesn't exist"
 apt-get update
 apt-get install -y git make g++ gcc ruby ruby-dev rubygems build-essential
 apt-get satisfy -y "$FPM_DEPENDS"
+echo "Node.js in the rootfs for this build: installed version and the repository it came from"
+apt-cache policy nodejs
 gem install --no-document fpm -v 1.16.0
 
 corepack enable pnpm
