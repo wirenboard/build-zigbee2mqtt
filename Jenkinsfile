@@ -8,31 +8,38 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '30', artifactNumToKeepStr: '30'))
     }
     parameters {
-        string(name: 'REPO', defaultValue: 'https://github.com/Koenkk/zigbee2mqtt', description: 'repo to get zigbee2mqtt from')
-        string(name: 'BRANCH', defaultValue: 'master', description: 'for checkout step')
-        string(name: 'TAG', defaultValue: '', description: 'use with VERSION_TO_NAME to build custom version (leave empty for find and use latest tag automatically)')
-        booleanParam(name: 'VERSION_TO_NAME', defaultValue: false, description: 'adds version number to package name as suffix, creating names like zigbee2mqtt-1.18.1')
-        booleanParam(name: 'ADD_VERSION_SUFFIX', defaultValue: true, description: 'for dev branches only')
-        string(name: 'WB_REVISION', defaultValue: '-wb101', description: 'for rebuilds, like -wb101')
-        string(name: 'WBDEV_IMAGE', defaultValue: '', description: 'docker image to use as devenv')
+        string(name: 'REPO', defaultValue: 'https://github.com/Koenkk/zigbee2mqtt', description: 'Repo to get zigbee2mqtt from')
+        string(name: 'BRANCH', defaultValue: 'master', description: 'For checkout step')
+        string(name: 'TAG', defaultValue: '', description: 'Use with VERSION_TO_NAME to build custom version (leave empty for find and use latest tag automatically)')
+        booleanParam(name: 'VERSION_TO_NAME', defaultValue: false, description: 'Adds version number to package name as suffix, creating names like zigbee2mqtt-1.18.1')
+        booleanParam(name: 'ADD_VERSION_SUFFIX', defaultValue: true, description: 'For dev branches only')
+        string(name: 'WB_REVISION', defaultValue: '-wb101', description: 'For rebuilds, like -wb101')
+        string(name: 'WBDEV_IMAGE', defaultValue: '', description: 'Docker image to use as devenv')
         string(name: 'WBDEV_TESTING_SETS', defaultValue: '',
-                description: 'comma-separated testing set names: their experimental.<name> repositories are added to the rootfs above testing and unstable, so packages from them win. Trixie targets only, not with UPLOAD_TO_POOL')
-        choice(name: 'WBDEV_TARGET', choices: ['trixie-armhf', 'trixie-arm64', 'bullseye-armhf', 'bullseye-arm64'], description: 'target architecture')
-        choice(name: 'FPM_DEPENDS', choices: ['nodejs (>= 22)', 'nodejs-16'],
-                description: 'zigbee2mqtt dependencies - used for build time on Jenkins and then write in control file in deb packet')
+                description: 'Comma-separated testing set names: their experimental.<name> repositories are added to the rootfs above testing and unstable, so packages from them win. Trixie targets only, not with UPLOAD_TO_POOL')
+        choice(name: 'WBDEV_TARGET', choices: ['trixie-armhf', 'trixie-arm64', 'bullseye-armhf', 'bullseye-arm64'], description: 'Target architecture')
+        // The dependency is the text before ':'; after it, a note for the form.
+        // Node 24 has an upper bound: the native module unix-dgram in the package is compiled for the ABI
+        // of the Node it was built with (NODE_MODULE_VERSION 137 for 24.x) and does not load on another major.
+        choice(name: 'FPM_DEPENDS',
+                choices: ['nodejs (>= 22)', 'nodejs (>= 24), nodejs (<< 25): upper bound for the unix-dgram native module ABI', 'nodejs-16'],
+                description: '''Node.js installed for the build and written to Depends of the package:
+- nodejs (>= 22) (default): Node 22 from the Wiren Board repositories, trixie and bullseye
+- nodejs (>= 24), nodejs (<< 25): Node 24, trixie only; until it is in the repositories, only from WBDEV_TESTING_SETS
+- nodejs-16: for zigbee2mqtt-1.18.1''')
         booleanParam(name: 'USE_TESTING_REPOSITORY', defaultValue: true,
-            description: 'use dependencies from unstable repo if necessary (with lower priority)')
+            description: 'Use dependencies from unstable repo if necessary (with lower priority)')
         string(name: 'NPM_REGISTRY', defaultValue: '',
-                description: 'select alternative mirror if necessary, e.g. https://registry.npmjs.org/, http://r.cnpmjs.org/')
+                description: 'Select alternative mirror if necessary, e.g. https://registry.npmjs.org/, http://r.cnpmjs.org/')
         choice(name: 'BUILD_NODE_LABEL',
                 choices: ['devenv', 'heavy-duty'],
-                description: '''build machines: a Jenkins label, any free machine with it is used:
+                description: '''Build machines: a Jenkins label, any free machine with it is used:
 - devenv (default): 16 cores, 31 GB, the machines regular Wiren Board package builds use
 - heavy-duty: 24 cores, 115 GB''')
         booleanParam(name: 'UPLOAD_TO_POOL', defaultValue: false,
-                description: 'upload the .deb to the apt pool at the end of the build. Off by default to keep the pool safe. Not with WBDEV_TESTING_SETS')
+                description: 'Upload the .deb to the apt pool at the end of the build. Off by default to keep the pool safe. Not with WBDEV_TESTING_SETS')
         booleanParam(name: 'FORCE_OVERWRITE', defaultValue: false,
-                description: 'with UPLOAD_TO_POOL: replace the same version already in the pool')
+                description: 'With UPLOAD_TO_POOL: replace the same version already in the pool')
     }
     environment {
         PROJECT_SUBDIR = 'zigbee2mqtt'
@@ -54,15 +61,19 @@ pipeline {
                     }
                 }
 
+                env.PACKAGE_DEPENDS = params.FPM_DEPENDS.split(':')[0].trim()
+                if (params.WBDEV_TARGET.startsWith('bullseye') && env.PACKAGE_DEPENDS.contains('>= 24')) {
+                    error("FPM_DEPENDS='${env.PACKAGE_DEPENDS}' for ${params.WBDEV_TARGET}: Node.js 24 needs glibc 2.38, bullseye has 2.31")
+                }
+
                 def repoType = params.USE_TESTING_REPOSITORY ? "testing" : "stable"
                 def buildName = "#${BUILD_NUMBER}:${params.WBDEV_TARGET}/${repoType}"
                 if (params.TAG) {
                     buildName += " custom_tag=${params.TAG}"
                 }
-                def description = "Build with depend: Node.js ${params.FPM_DEPENDS} for ${params.WBDEV_TARGET}"
+                def description = "Build with depend: ${env.PACKAGE_DEPENDS} for ${params.WBDEV_TARGET}"
 
-                // null on the first build after the parameter appeared
-                def testingSets = (params.WBDEV_TESTING_SETS ?: '').trim()
+                def testingSets = params.WBDEV_TESTING_SETS.trim()
                 if (testingSets) {
                     if (params.UPLOAD_TO_POOL) {
                         error("WBDEV_TESTING_SETS='${testingSets}' with UPLOAD_TO_POOL: a package built against testing sets must not go to the pool")
@@ -151,7 +162,7 @@ pipeline {
                 // Initialize params as envvars, workaround for bug https://issues.jenkins-ci.org/browse/JENKINS-41929
                 WBDEV_IMAGE = "${params.WBDEV_IMAGE ?: (params.WBDEV_TARGET.startsWith('bullseye') ? 'contactless/devenv:latest_bullseye' : 'contactless/devenv:latest')}"
                 WBDEV_TARGET = "${params.WBDEV_TARGET}"
-                WBDEV_TESTING_SETS = "${params.WBDEV_TESTING_SETS ?: ''}"
+                WBDEV_TESTING_SETS = "${params.WBDEV_TESTING_SETS}"
             }
             steps { script {
                 def name = params.VERSION_TO_NAME ? "zigbee2mqtt-${PURE_VERSION}" : "zigbee2mqtt";
@@ -163,7 +174,7 @@ pipeline {
                 sh "printenv | sort"
                 sh "wbdev root printenv | sort"
                 sh """wbdev chroot bash -c \\
-                          "FPM_DEPENDS='${params.FPM_DEPENDS}' \\
+                          "FPM_DEPENDS='${env.PACKAGE_DEPENDS}' \\
                           NPM_REGISTRY='${params.NPM_REGISTRY}' \\
                           ./build.sh ${name} ${VERSION} ${PROJECT_SUBDIR} ${RESULT_SUBDIR} ${specialParams}" """
             }}
