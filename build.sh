@@ -43,8 +43,8 @@ echo "Prepare environment"
 echo "Current APT configuration in wirenboard.list:"
 cat /etc/apt/sources.list.d/wirenboard.list || echo "File doesn't exist"
 
-# The apt dependency for one Node.js major version
-nodejs_dependency() {
+# Turns a Node.js major version into the apt dependency the build and the package use
+format_apt_dependency() {
     case "$1" in
         # zigbee2mqtt 1.18.1 needs Node 16, which ships as the separate package nodejs-16
         16) echo "nodejs-16" ;;
@@ -74,9 +74,13 @@ install_nodejs() {
 }
 
 apt-get update
-apt-get install -y git make g++ gcc ruby ruby-dev rubygems build-essential
-NODEJS_DEPENDENCY=$(nodejs_dependency "$NODEJS_MAJOR_VERSION")
+
+# Node.js first: if the required version is missing, the build fails in seconds instead of
+# after the minutes the toolchain below costs under emulation
+NODEJS_DEPENDENCY=$(format_apt_dependency "$NODEJS_MAJOR_VERSION")
 install_nodejs "$NODEJS_DEPENDENCY"
+
+apt-get install -y git make g++ gcc ruby ruby-dev rubygems build-essential
 gem install --no-document fpm -v 1.16.0
 
 corepack enable pnpm
