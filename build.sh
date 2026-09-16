@@ -1,13 +1,20 @@
 #!/bin/bash -xe
 
 NPM_REGISTRY=${NPM_REGISTRY:-}
-FPM_DEPENDS=${FPM_DEPENDS:-"nodejs (>= 22)"}
 
 if [[ $# -lt 4 ]]; then
     echo >&2 "Usage: $0 <pkg_name> <version> <z2m_dir> <result_dir> [optional fpm flags]"
     echo >&2 "Env used:"
-    echo -e >&2 "\tFPM_DEPENDS\tdependencies"
+    echo -e >&2 "\tNODEJS_MAJOR_VERSION\tthe Node.js major to build with, required"
     echo -e >&2 "\tNPM_REGISTRY\tnpm registry address override"
+    exit 2
+fi
+
+# No default: this decides both which Node.js the build runs on and what the package requires,
+# and guessing it for the caller produces a package nobody asked for
+if [[ -z ${NODEJS_MAJOR_VERSION:-} ]]; then
+    echo >&2 "NODEJS_MAJOR_VERSION is not set: the Node.js major the build installs and the"
+    echo >&2 "package requires, for example 24"
     exit 2
 fi
 
@@ -36,16 +43,29 @@ echo "Prepare environment"
 echo "Current APT configuration in wirenboard.list:"
 cat /etc/apt/sources.list.d/wirenboard.list || echo "File doesn't exist"
 
-# Installs the Node.js that FPM_DEPENDS requires, or reports what the rootfs offers instead
+# The apt dependency for one Node.js major version
+nodejs_dependency() {
+    case "$1" in
+        # zigbee2mqtt 1.18.1 needs Node 16, which ships as the separate package nodejs-16
+        16) echo "nodejs-16" ;;
+        # unix-dgram, the only native module built from source here, is compiled for the ABI of
+        # the Node.js it was built with and does not load on another major, hence the upper bound
+        *)  echo "nodejs (>= $1), nodejs (<< $(($1 + 1)))" ;;
+    esac
+}
+
+# Installs the Node.js the package will require, or reports what the rootfs offers instead
 install_nodejs() {
+    local dependency=$1
+
     echo "Node.js available in the rootfs before the install:"
     apt-cache policy nodejs
 
-    if ! apt-get satisfy -y "$FPM_DEPENDS"; then
-        echo >&2 "=== FPM_DEPENDS='$FPM_DEPENDS' cannot be satisfied in this rootfs ==="
+    if ! apt-get satisfy -y "$dependency"; then
+        echo >&2 "=== '$dependency' cannot be satisfied in this rootfs ==="
         apt-cache policy nodejs >&2
         echo >&2 "A version the repositories do not have yet can come from a testing set:"
-        echo >&2 "  set WBDEV_TESTING_SETS=<name>, or pick FPM_DEPENDS from the list above"
+        echo >&2 "  set WBDEV_TESTING_SETS=<name>, or pick another major from the list above"
         return 1
     fi
 
@@ -55,7 +75,8 @@ install_nodejs() {
 
 apt-get update
 apt-get install -y git make g++ gcc ruby ruby-dev rubygems build-essential
-install_nodejs
+NODEJS_DEPENDENCY=$(nodejs_dependency "$NODEJS_MAJOR_VERSION")
+install_nodejs "$NODEJS_DEPENDENCY"
 gem install --no-document fpm -v 1.16.0
 
 corepack enable pnpm
@@ -140,7 +161,7 @@ fpm --input-type dir \
     --description 'Zigbee to MQTT bridge (package by Wiren Board team)' \
     --url 'https://www.zigbee2mqtt.io/' \
     --vendor 'Wiren Board' \
-    --depends "$FPM_DEPENDS" \
+    --depends "$NODEJS_DEPENDENCY" \
     --before-upgrade package/before-upgrade.sh \
     --after-upgrade package/after-upgrade.sh \
     --package "$RESULT_SUBDIR/result.deb" \
