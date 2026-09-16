@@ -6,7 +6,7 @@ pipeline {
     }
     options {
         buildDiscarder(logRotator(numToKeepStr: '30', artifactNumToKeepStr: '30'))
-        // A build takes 10 to 15 minutes; anything past two hours is stuck, usually in qemu.
+        // A build takes 10 to 15 minutes; anything past two hours is stuck, usually in qemu
         timeout(time: 2, unit: 'HOURS')
     }
     parameters {
@@ -20,12 +20,12 @@ pipeline {
         string(name: 'WBDEV_TESTING_SETS', defaultValue: '',
                 description: 'Comma-separated testing set names: their experimental.<name> repositories are added to the rootfs above testing and unstable, so packages from them win. Trixie targets only. With UPLOAD_TO_POOL only for an ~exp~ version, which reaches testing sets and nothing else')
         choice(name: 'WBDEV_TARGET', choices: ['trixie-armhf', 'trixie-arm64', 'bullseye-armhf', 'bullseye-arm64'], description: 'Target architecture')
-        // Node 24 has an upper bound: the native module unix-dgram in the package is compiled for the ABI
-        // of the Node it was built with (NODE_MODULE_VERSION 137 for 24.x) and does not load on another major.
+        // The upper bound is not optional: the native module unix-dgram is built for the ABI of the
+        // Node.js it was compiled with and does not load on another major version
         choice(name: 'FPM_DEPENDS',
                 choices: ['nodejs (>= 24), nodejs (<< 25)', 'nodejs (>= 22)', 'nodejs-16'],
                 description: '''Node.js installed for the build and written to Depends of the package:
-- nodejs (>= 24), nodejs (<< 25) (default): Node 24, trixie only; the upper bound is for the ABI of the unix-dgram native module. Until Node 24 is in the repositories, it comes only from WBDEV_TESTING_SETS, which has to be filled in by hand
+- nodejs (>= 24), nodejs (<< 25) (default): Node 24, trixie only. A version the repositories do not have yet comes from WBDEV_TESTING_SETS
 - nodejs (>= 22): Node 22 from the Wiren Board repositories, trixie and bullseye
 - nodejs-16: for zigbee2mqtt-1.18.1''')
         booleanParam(name: 'USE_TESTING_REPOSITORY', defaultValue: true,
@@ -49,7 +49,7 @@ pipeline {
     stages {
         stage('Initialize build') { steps {
             script {
-                // These values go into shell command lines: allow only what they legitimately contain.
+                // These values go into shell command lines: allow only what they legitimately contain
                 def formats = [
                     TAG:          /^[A-Za-z0-9._\/+-]*$/,
                     WB_REVISION:  /^-wb\d+$/,
@@ -75,14 +75,14 @@ pipeline {
 
                 def testingSets = params.WBDEV_TESTING_SETS.trim()
                 if (testingSets) {
-                    // Such a package may need what only the set has, so it must stay out of the
-                    // regular repositories. An ~exp~ version does: staging drops those, unstable follows.
+                    // Such a package may need what only the set has, so it must stay out of the regular
+                    // repositories. An ~exp~ version does: staging drops those, unstable follows staging
                     def exp = params.ADD_VERSION_SUFFIX && !wb.isBranchRelease(env.BRANCH_NAME)
                     if (params.UPLOAD_TO_POOL && !exp) {
                         error("UPLOAD_TO_POOL with WBDEV_TESTING_SETS needs an ~exp~ version: " +
                               "ADD_VERSION_SUFFIX on a non-release branch.")
                     }
-                    // Names and missing sets are checked by devenv itself; images without PR #284 silently ignore the sets in wbdev chroot.
+                    // devenv checks the names itself; images without PR #284 ignore the sets in wbdev chroot
                     if (params.WBDEV_TARGET.startsWith('bullseye') && !params.WBDEV_IMAGE) {
                         error("WBDEV_TESTING_SETS: contactless/devenv:latest_bullseye used for ${params.WBDEV_TARGET} does not add testing sets in wbdev chroot")
                     }
@@ -191,7 +191,7 @@ pipeline {
                 }
             }
         }
-        // wbDeploy uploads every archived .deb of this build, which is why only result/*.deb is archived.
+        // wbDeploy uploads every archived .deb of this build, which is why only result/*.deb is archived
         stage('Setup deploy') {
             when { expression {
                 params.UPLOAD_TO_POOL

@@ -36,8 +36,7 @@ echo "Prepare environment"
 echo "Current APT configuration in wirenboard.list:"
 cat /etc/apt/sources.list.d/wirenboard.list || echo "File doesn't exist"
 
-# Installs the Node.js that FPM_DEPENDS asks for, and explains itself when the rootfs has no
-# such version: until Node 24 is released it exists only in a testing set.
+# Installs the Node.js that FPM_DEPENDS requires, or reports what the rootfs offers instead
 install_nodejs() {
     echo "Node.js available in the rootfs before the install:"
     apt-cache policy nodejs
@@ -45,8 +44,8 @@ install_nodejs() {
     if ! apt-get satisfy -y "$FPM_DEPENDS"; then
         echo >&2 "=== FPM_DEPENDS='$FPM_DEPENDS' cannot be satisfied in this rootfs ==="
         apt-cache policy nodejs >&2
-        echo >&2 "Node.js 24 is in the repositories only after its release; until then it comes from"
-        echo >&2 "a testing set: set WBDEV_TESTING_SETS=<name>, or use FPM_DEPENDS='nodejs (>= 22)'"
+        echo >&2 "A version the repositories do not have yet can come from a testing set:"
+        echo >&2 "  set WBDEV_TESTING_SETS=<name>, or pick FPM_DEPENDS from the list above"
         return 1
     fi
 
