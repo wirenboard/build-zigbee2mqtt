@@ -16,7 +16,7 @@ pipeline {
         string(name: 'WB_REVISION', defaultValue: '-wb101', description: 'For rebuilds, like -wb101')
         string(name: 'WBDEV_IMAGE', defaultValue: '', description: 'Docker image to use as devenv')
         string(name: 'WBDEV_TESTING_SETS', defaultValue: '',
-                description: 'Comma-separated testing set names: their experimental.<name> repositories are added to the rootfs above testing and unstable, so packages from them win. Trixie targets only, not with UPLOAD_TO_POOL')
+                description: 'Comma-separated testing set names: their experimental.<name> repositories are added to the rootfs above testing and unstable, so packages from them win. Trixie targets only. With UPLOAD_TO_POOL only for an ~exp~ version, which reaches testing sets and nothing else')
         choice(name: 'WBDEV_TARGET', choices: ['trixie-armhf', 'trixie-arm64', 'bullseye-armhf', 'bullseye-arm64'], description: 'Target architecture')
         // Node 24 has an upper bound: the native module unix-dgram in the package is compiled for the ABI
         // of the Node it was built with (NODE_MODULE_VERSION 137 for 24.x) and does not load on another major.
@@ -36,7 +36,7 @@ pipeline {
 - devenv (default): 16 cores, 31 GB, the machines regular Wiren Board package builds use
 - heavy-duty: 24 cores, 115 GB''')
         booleanParam(name: 'UPLOAD_TO_POOL', defaultValue: false,
-                description: 'Upload the .deb to the apt pool at the end of the build. Off by default to keep the pool safe. Not with WBDEV_TESTING_SETS')
+                description: 'Upload the .deb to the apt pool at the end of the build. Off by default to keep the pool safe. With WBDEV_TESTING_SETS needs ADD_VERSION_SUFFIX')
         booleanParam(name: 'FORCE_OVERWRITE', defaultValue: false,
                 description: 'With UPLOAD_TO_POOL: replace the same version already in the pool')
     }
@@ -73,10 +73,14 @@ pipeline {
 
                 def testingSets = params.WBDEV_TESTING_SETS.trim()
                 if (testingSets) {
-                    if (params.UPLOAD_TO_POOL) {
-                        error("WBDEV_TESTING_SETS='${testingSets}' with UPLOAD_TO_POOL: a package built against testing sets must not go to the pool")
+                    // Such a package may need what only the set has, so it must stay out of the
+                    // regular repositories. An ~exp~ version does: staging drops those, unstable follows.
+                    def exp = params.ADD_VERSION_SUFFIX && !wb.isBranchRelease(env.BRANCH_NAME)
+                    if (params.UPLOAD_TO_POOL && !exp) {
+                        error("UPLOAD_TO_POOL with WBDEV_TESTING_SETS needs an ~exp~ version: " +
+                              "ADD_VERSION_SUFFIX on a non-release branch.")
                     }
-                    // Names and missing sets are checked by devenv itself; images before 15.09.2026 silently ignore the sets in wbdev chroot.
+                    // Names and missing sets are checked by devenv itself; images without PR #284 silently ignore the sets in wbdev chroot.
                     if (params.WBDEV_TARGET.startsWith('bullseye') && !params.WBDEV_IMAGE) {
                         error("WBDEV_TESTING_SETS: contactless/devenv:latest_bullseye used for ${params.WBDEV_TARGET} does not add testing sets in wbdev chroot")
                     }
