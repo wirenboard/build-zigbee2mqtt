@@ -185,6 +185,7 @@ pipeline {
                 }
             }
         }
+        // wbDeploy uploads every archived .deb of this build, which is why only result/*.deb is archived.
         stage('Setup deploy') {
             when { expression {
                 params.UPLOAD_TO_POOL
@@ -192,7 +193,6 @@ pipeline {
             steps { script {
                 wbDeploy projectSubdir: env.PROJECT_SUBDIR,
                         forceOverwrite: params.FORCE_OVERWRITE,
-                        filesFilter: "$RESULT_SUBDIR/*.deb",
                         withGithubRelease: false
             }}
         }
