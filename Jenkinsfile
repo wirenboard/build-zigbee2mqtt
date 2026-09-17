@@ -22,7 +22,7 @@ pipeline {
         choice(name: 'WBDEV_TARGET', choices: ['trixie-armhf', 'trixie-arm64', 'bullseye-armhf', 'bullseye-arm64'], description: 'Target architecture')
         choice(name: 'NODEJS_MAJOR_VERSION',
                 choices: ['24', '22', '16'],
-                description: '''Node.js major the build installs and the package requires. build.sh turns it into an apt dependency, 24 becomes nodejs (>= 24), nodejs (<< 25):
+                description: '''Node.js major the build installs and the package requires. scripts/build.sh turns it into an apt dependency, 24 becomes nodejs (>= 24), nodejs (<< 25):
 - 24 (default): trixie only, Node 24 needs glibc 2.38. A version the repositories do not have yet comes from WBDEV_TESTING_SETS
 - 22: from the Wiren Board repositories, trixie and bullseye
 - 16: the separate nodejs-16 package, for zigbee2mqtt 1.18.1''')
@@ -178,7 +178,7 @@ pipeline {
                 sh """wbdev chroot bash -c \\
                           "NODEJS_MAJOR_VERSION='${params.NODEJS_MAJOR_VERSION}' \\
                           NPM_REGISTRY='${params.NPM_REGISTRY}' \\
-                          ./build.sh ${name} ${VERSION} ${PROJECT_SUBDIR} ${RESULT_SUBDIR} ${specialParams}" """
+                          scripts/build.sh ${name} ${VERSION} ${PROJECT_SUBDIR} ${RESULT_SUBDIR} ${specialParams}" """
             }}
             post {
                 always {
@@ -195,7 +195,7 @@ pipeline {
             steps {
                 sh """wbdev chroot bash -c \\
                           "NODEJS_MAJOR_VERSION='${params.NODEJS_MAJOR_VERSION}' \\
-                          ./test-deb.sh ${RESULT_SUBDIR}" """
+                          scripts/test-deb.sh ${RESULT_SUBDIR}" """
             }
             post {
                 always {
