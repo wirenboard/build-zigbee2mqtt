@@ -21,7 +21,14 @@ parse_arguments() {
     RESULT_DIR=$1
     [ -d "${RESULT_DIR}" ] || { echo "${RESULT_DIR}: no such directory" >&2; exit 2; }
     [ -n "${BUILD_AND_REQUIRE_NODEJS:-}" ] || { echo "BUILD_AND_REQUIRE_NODEJS is not set" >&2; exit 2; }
-    DEB=$(ls -1 "${RESULT_DIR}"/*.deb 2>/dev/null | head -1)
+    DEB=''
+    for file in "${RESULT_DIR}"/*.deb; do
+        [ -f "${file}" ] || continue
+        # Absolute: apt reads "dir/file.deb" as the package "dir" from the release "file.deb",
+        # and a bare name as a package name. Only a path of its own is treated as a file
+        DEB=$(readlink -f "${file}")
+        break
+    done
     [ -n "${DEB}" ] || { echo "no .deb in ${RESULT_DIR}: build.sh has to run first" >&2; exit 2; }
     ARCH=$(dpkg --print-architecture)
     APP=/mnt/data/root/zigbee2mqtt
