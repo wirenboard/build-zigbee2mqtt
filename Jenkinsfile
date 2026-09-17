@@ -43,6 +43,15 @@ pipeline {
     environment {
         PROJECT_SUBDIR = 'zigbee2mqtt'
         RESULT_SUBDIR = 'result'
+
+        // The rootfs of the build, shared by Build and Test deb: the package is checked on the
+        // very Node.js it was built with
+        WBDEV_BUILD_METHOD = "qemuchroot"
+        WBDEV_USE_UNSTABLE_DEPS = "${params.USE_TESTING_REPOSITORY ? 'y' : ''}"
+        // Initialize params as envvars, workaround for bug https://issues.jenkins-ci.org/browse/JENKINS-41929
+        WBDEV_IMAGE = "${params.WBDEV_IMAGE ?: (params.WBDEV_TARGET.startsWith('bullseye') ? 'contactless/devenv:latest_bullseye' : 'contactless/devenv:latest')}"
+        WBDEV_TARGET = "${params.WBDEV_TARGET}"
+        WBDEV_TESTING_SETS = "${params.WBDEV_TESTING_SETS}"
     }
     stages {
         stage('Initialize build') { steps {
@@ -157,15 +166,6 @@ pipeline {
             }}}
         }
         stage('Build') {
-            environment {
-                WBDEV_BUILD_METHOD="qemuchroot"
-                WBDEV_USE_UNSTABLE_DEPS = "${params.USE_TESTING_REPOSITORY ? 'y' : ''}"
-
-                // Initialize params as envvars, workaround for bug https://issues.jenkins-ci.org/browse/JENKINS-41929
-                WBDEV_IMAGE = "${params.WBDEV_IMAGE ?: (params.WBDEV_TARGET.startsWith('bullseye') ? 'contactless/devenv:latest_bullseye' : 'contactless/devenv:latest')}"
-                WBDEV_TARGET = "${params.WBDEV_TARGET}"
-                WBDEV_TESTING_SETS = "${params.WBDEV_TESTING_SETS}"
-            }
             steps { script {
                 def name = params.VERSION_TO_NAME ? "zigbee2mqtt-${PURE_VERSION}" : "zigbee2mqtt";
                 def specialParams = "";
@@ -186,6 +186,20 @@ pipeline {
                 }
                 success {
                     archiveArtifacts artifacts: "$RESULT_SUBDIR/*.deb"
+                }
+            }
+        }
+        // Nothing leaves the build unchecked: the package is opened on the same rootfs, and its
+        // native modules are loaded on the Node.js it declares
+        stage('Test deb') {
+            steps {
+                sh """wbdev chroot bash -c \\
+                          "NODEJS_MAJOR_VERSION='${params.NODEJS_MAJOR_VERSION}' \\
+                          ./test-deb.sh ${RESULT_SUBDIR}" """
+            }
+            post {
+                always {
+                    sh 'wbdev root chown -R jenkins:jenkins .'
                 }
             }
         }
