@@ -249,6 +249,14 @@ main() {
     verify_suites
     echo "checking $(basename "${DEB}") against Node.js ${BUILD_AND_REQUIRE_NODEJS}"
 
+    # Every wbdev call starts a fresh container, so the package lists here are the ones baked into
+    # the image: they know nothing about the Node.js this package requires, and without an update
+    # apt calls that dependency uninstallable. The repositories themselves, testing sets included,
+    # are written into the rootfs by wbdev before this script runs
+    apt-get update
+    echo "Node.js available for the install:"
+    apt-cache policy nodejs
+
     section "the .deb file";                   run "${SUITE_DEB}"
     section "install";                         install_package
     section "the installed package";           run "${SUITE_INSTALLED}"
