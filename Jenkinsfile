@@ -1,5 +1,90 @@
 // FIXME: generalize this pipeline some day for other 3rdparties
 
+// One way to build per target, so it follows from the architecture instead of a parameter.
+// ARM: inside the controller rootfs, everything native is compiled under qemu.
+// amd64: devenv has no amd64 rootfs, the devenv container itself is trixie amd64, so it builds there
+String wbdevCommand() {
+    if (params.WBDEV_TARGET.endsWith('-amd64')) {
+        return 'root'
+    }
+    return 'chroot'
+}
+
+// The popup of a stage in Stage View shows the message of the error that stopped it, and a failed
+// sh step writes there "script returned exit code N". Every script lists its codes in its own
+// header, so the message says what the code means instead of leaving the log the only place to look
+String exitMeaning(String script, int code) {
+    String codes = ''
+    for (String line in readFile("scripts/${script}").split('\n')) {
+        if (line.startsWith('# Exit:')) {
+            codes = line.replaceFirst(/# Exit:\s*/, '')
+            continue
+        }
+        // The list may go on over the next lines, each of them indented and starting with a code
+        if (codes && line ==~ /^#\s\s+\d+ .*/) {
+            codes += ' ' + line.replaceFirst(/^#\s+/, '')
+            continue
+        }
+        if (codes) {
+            break
+        }
+    }
+    for (String item in codes.split(',')) {
+        String entry = item.trim()
+        int space = entry.indexOf(' ')
+        if (space > 0 && entry.substring(0, space) == code.toString()) {
+            return entry.substring(space + 1)
+        }
+    }
+    return 'the header of the script does not list this code'
+}
+
+// Runs one of scripts/ where this target is built, with the variables that script reads.
+// bash runs it, so a checkout without the executable bit still works
+void runScript(String script, String variables, String args) {
+    int rc = sh(returnStatus: true, script: "wbdev ${wbdevCommand()} bash -c " +
+                "\"${variables} bash scripts/${script} ${args}\"")
+    if (rc != 0) {
+        error("scripts/${script} stopped with code ${rc}: ${exitMeaning(script, rc)}")
+    }
+}
+
+// Where the package belongs. Controllers take theirs from the release repository, amd64 is built
+// for development machines and goes to dev-tools. Each repository has its own testing sets, named
+// by its own config: a set published with the release config serves armhf and arm64, a set that
+// has to serve amd64 lives in dev-tools. wb.repos gives the upload job and the aptly config
+Map targetRepo() {
+    if (params.WBDEV_TARGET.endsWith('-amd64')) {
+        return [name:              'dev-tools',
+                uploadJob:         wb.repos.devTools.uploadJob,
+                aptlyConfig:       wb.repos.devTools.aptlyConfig,
+                testingSetsConfig: 'testing-sets-devtools-aptly-config']
+    }
+    return [name:              'release',
+            uploadJob:         wb.repos.release.uploadJob,
+            aptlyConfig:       wb.repos.release.aptlyConfig,
+            testingSetsConfig: 'testing-sets-release-aptly-config']
+}
+
+// The devenv image of the target release, unless the parameter names another one
+String devenvImage() {
+    if (params.WBDEV_IMAGE) {
+        return params.WBDEV_IMAGE
+    }
+    if (params.WBDEV_TARGET.startsWith('bullseye')) {
+        return 'contactless/devenv:latest_bullseye'
+    }
+    return 'contactless/devenv:latest'
+}
+
+// devenv reads this as a flag: a non-empty value adds the unstable repository below the stable one
+String unstableDeps() {
+    if (params.USE_TESTING_REPOSITORY) {
+        return 'y'
+    }
+    return ''
+}
+
 pipeline {
     agent {
         label "${params.BUILD_NODE_LABEL}"
@@ -19,7 +104,9 @@ pipeline {
         string(name: 'WBDEV_IMAGE', defaultValue: '', description: 'Docker image to use as devenv')
         string(name: 'WBDEV_TESTING_SETS', defaultValue: '',
                 description: 'Comma-separated testing set names: their experimental.<name> repositories are added to the rootfs above testing and unstable, so packages from them win. Trixie targets only. With UPLOAD_TO_POOL only for an ~exp~ version, which reaches testing sets and nothing else')
-        choice(name: 'WBDEV_TARGET', choices: ['trixie-armhf', 'trixie-arm64', 'bullseye-armhf', 'bullseye-arm64'], description: 'Target architecture')
+        choice(name: 'WBDEV_TARGET',
+                choices: ['trixie-armhf', 'trixie-arm64', 'trixie-amd64', 'bullseye-armhf', 'bullseye-arm64'],
+                description: '''Target architecture. The controller ones are built in their rootfs under qemu; trixie-amd64 is built natively in the devenv container itself and goes to the dev-tools repository, for development machines. Its Node.js comes from dev-tools too: nothing else is in the container sources, so WBDEV_TESTING_SETS does not reach this build. A set that has to serve amd64 is a dev-tools set, published with testing-sets-devtools-aptly-config''')
         choice(name: 'BUILD_AND_REQUIRE_NODEJS',
                 choices: ['24', '22', '16'],
                 description: '''The package is built on this Node.js major and pinned to it: scripts/build.sh turns 24 into nodejs (>= 24), nodejs (<< 25), so the package refuses to install on another major. The reason is unix-dgram, a native module built for the ABI of that Node.js:
@@ -44,12 +131,12 @@ pipeline {
         PROJECT_SUBDIR = 'zigbee2mqtt'
         RESULT_SUBDIR = 'result'
 
-        // The rootfs of the build, shared by Build and Test deb: the package is checked on the
+        // The place the build runs, shared by Build and Test deb: the package is checked on the
         // very Node.js it was built with
         WBDEV_BUILD_METHOD = "qemuchroot"
-        WBDEV_USE_UNSTABLE_DEPS = "${params.USE_TESTING_REPOSITORY ? 'y' : ''}"
+        WBDEV_USE_UNSTABLE_DEPS = "${unstableDeps()}"
         // Initialize params as envvars, workaround for bug https://issues.jenkins-ci.org/browse/JENKINS-41929
-        WBDEV_IMAGE = "${params.WBDEV_IMAGE ?: (params.WBDEV_TARGET.startsWith('bullseye') ? 'contactless/devenv:latest_bullseye' : 'contactless/devenv:latest')}"
+        WBDEV_IMAGE = "${devenvImage()}"
         WBDEV_TARGET = "${params.WBDEV_TARGET}"
         WBDEV_TESTING_SETS = "${params.WBDEV_TESTING_SETS}"
     }
@@ -73,28 +160,50 @@ pipeline {
                     error("BUILD_AND_REQUIRE_NODEJS=${params.BUILD_AND_REQUIRE_NODEJS} for ${params.WBDEV_TARGET}: Node.js 24 needs glibc 2.38, bullseye has 2.31")
                 }
 
-                def repoType = params.USE_TESTING_REPOSITORY ? "testing" : "stable"
+                def repoType = "stable"
+                if (params.USE_TESTING_REPOSITORY) {
+                    repoType = "testing"
+                }
                 def buildName = "#${BUILD_NUMBER}:${params.WBDEV_TARGET}/${repoType}"
                 if (params.TAG) {
                     buildName += " custom_tag=${params.TAG}"
                 }
                 def description = "Build on Node.js ${params.BUILD_AND_REQUIRE_NODEJS} for ${params.WBDEV_TARGET}"
+                // Such a package stays out of the regular repositories: an ~exp~ version reaches a
+                // testing set and nothing else. Staging drops those, unstable follows staging
+                def exp = params.ADD_VERSION_SUFFIX && !wb.isBranchRelease(env.BRANCH_NAME)
+                def repo = targetRepo()
+                if (params.UPLOAD_TO_POOL) {
+                    description += ", uploads to ${repo.name} (${repo.uploadJob})"
+                    if (exp) {
+                        description += ", ~exp~ goes to a set of ${repo.testingSetsConfig}"
+                    }
+                } else {
+                    description += ", no upload"
+                }
 
                 def testingSets = params.WBDEV_TESTING_SETS.trim()
                 if (testingSets) {
-                    // Such a package may need what only the set has, so it must stay out of the regular
-                    // repositories. An ~exp~ version does: staging drops those, unstable follows staging
-                    def exp = params.ADD_VERSION_SUFFIX && !wb.isBranchRelease(env.BRANCH_NAME)
                     if (params.UPLOAD_TO_POOL && !exp) {
                         error("UPLOAD_TO_POOL with WBDEV_TESTING_SETS needs an ~exp~ version: " +
                               "ADD_VERSION_SUFFIX on a non-release branch.")
+                    }
+                    // This parameter is about taking packages from a set, and wbdev does that by
+                    // writing the set into the rootfs. An amd64 build never enters one: it runs in the
+                    // devenv container, whose apt sources are fixed in the image. Publishing into a set
+                    // is the other direction and works for amd64, with the dev-tools config
+                    if (wbdevCommand() == 'root') {
+                        error("WBDEV_TESTING_SETS for ${params.WBDEV_TARGET}: wbdev adds a set to the " +
+                              "rootfs, and this target is built in the devenv container instead, which " +
+                              "takes packages from dev-tools only. The Node.js this build needs has to " +
+                              "be in dev-tools itself.")
                     }
                     // devenv checks the names itself; images without PR #284 ignore the sets in wbdev chroot
                     if (params.WBDEV_TARGET.startsWith('bullseye') && !params.WBDEV_IMAGE) {
                         error("WBDEV_TESTING_SETS: contactless/devenv:latest_bullseye used for ${params.WBDEV_TARGET} does not add testing sets in wbdev chroot")
                     }
                     buildName += " testing_sets=${testingSets}"
-                    description += ", testing sets: ${testingSets}"
+                    description += ", builds on testing sets: ${testingSets}"
                 }
                 currentBuild.displayName = buildName
                 currentBuild.description = description
@@ -128,7 +237,10 @@ pipeline {
                 sshagent (credentials: ['jenkins-github-public-ssh']) {
                     sh 'git config --add remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*" && git fetch --all'
                     script {
-                        def tagToUse = params.TAG ?: env.LATEST_TAG
+                        def tagToUse = params.TAG
+                        if (!tagToUse) {
+                            tagToUse = env.LATEST_TAG
+                        }
                         echo "Checking out tag: ${tagToUse}"
                         sh "git checkout ${tagToUse}"
                     }
@@ -160,25 +272,31 @@ pipeline {
                     sh 'git config --add remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*" && git fetch --all'
                 }
                 env.PURE_VERSION = sh(returnStdout: true, script: "git describe --tags | sed 's/zigbee2mqtt-//'").trim()
-                env.VERSION = env.PURE_VERSION + params.WB_REVISION + (env.WB_VERSION_SUFFIX ?: '')
+                // The suffix stage runs for branches only, so a release build has nothing to add here
+                def suffix = ''
+                if (env.WB_VERSION_SUFFIX) {
+                    suffix = env.WB_VERSION_SUFFIX
+                }
+                env.VERSION = env.PURE_VERSION + params.WB_REVISION + suffix
                 echo "Pure version: $PURE_VERSION"
                 echo "Version with suffix: $VERSION"
             }}}
         }
         stage('Build') {
             steps { script {
-                def name = params.VERSION_TO_NAME ? "zigbee2mqtt-${PURE_VERSION}" : "zigbee2mqtt";
-                def specialParams = "";
+                def name = "zigbee2mqtt"
+                def specialParams = ""
                 if (params.VERSION_TO_NAME) {
+                    name = "zigbee2mqtt-${PURE_VERSION}"
                     specialParams = "--provides zigbee2mqtt --conflicts zigbee2mqtt --replaces zigbee2mqtt"
                 }
 
                 sh "printenv | sort"
                 sh "wbdev root printenv | sort"
-                sh """wbdev chroot bash -c \\
-                          "BUILD_AND_REQUIRE_NODEJS='${params.BUILD_AND_REQUIRE_NODEJS}' \\
-                          NPM_REGISTRY='${params.NPM_REGISTRY}' \\
-                          scripts/build.sh ${name} ${VERSION} ${PROJECT_SUBDIR} ${RESULT_SUBDIR} ${specialParams}" """
+                runScript('build.sh',
+                          "BUILD_AND_REQUIRE_NODEJS='${params.BUILD_AND_REQUIRE_NODEJS}' " +
+                          "NPM_REGISTRY='${params.NPM_REGISTRY}'",
+                          "${name} ${VERSION} ${PROJECT_SUBDIR} ${RESULT_SUBDIR} ${specialParams}")
             }}
             post {
                 always {
@@ -189,13 +307,13 @@ pipeline {
                 }
             }
         }
-        // Nothing leaves the build unchecked: the package is opened on the same rootfs, and its
+        // Nothing leaves the build unchecked: the package is opened where it was built, and its
         // native modules are loaded on the Node.js it declares
         stage('Test deb') {
             steps {
-                sh """wbdev chroot bash -c \\
-                          "BUILD_AND_REQUIRE_NODEJS='${params.BUILD_AND_REQUIRE_NODEJS}' \\
-                          scripts/test-deb.sh ${RESULT_SUBDIR}" """
+                runScript('test-deb.sh',
+                          "BUILD_AND_REQUIRE_NODEJS='${params.BUILD_AND_REQUIRE_NODEJS}'",
+                          "${RESULT_SUBDIR}")
             }
             post {
                 always {
@@ -210,6 +328,8 @@ pipeline {
             }}
             steps { script {
                 wbDeploy projectSubdir: env.PROJECT_SUBDIR,
+                        uploadJob: targetRepo().uploadJob,
+                        aptlyConfig: targetRepo().aptlyConfig,
                         forceOverwrite: params.FORCE_OVERWRITE,
                         withGithubRelease: false
             }}

@@ -3,7 +3,7 @@
 # the native modules inside it load on the Node.js the package requires.
 # Usage: test-deb.sh <result dir>
 # Env:   BUILD_AND_REQUIRE_NODEJS, the major the package has to depend on
-# Exit:  0 all checks passed, 1 a check failed, 2 usage or a broken suite list
+# Exit:  0 all checks passed, 1 a check failed (the summary names it), 2 usage or a broken suite list
 #
 # Runs inside `wbdev chroot` right after build.sh, where that Node.js is already installed.
 # One test is one function named test_*; the suites at the bottom say which of them run and in

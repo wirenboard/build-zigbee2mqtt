@@ -4,7 +4,7 @@
 # Usage: build.sh <package name> <version> <sources dir> <result dir> [extra fpm flags]
 # Env:   BUILD_AND_REQUIRE_NODEJS, the Node.js major to build with and to require, no default
 #        NPM_REGISTRY, registry override, empty for the default one
-# Exit:  0 package built, 1 a step failed, 2 usage
+# Exit:  0 package built, 1 a build step failed (the log names it), 2 usage
 #
 # Runs inside `wbdev chroot`. Every command is echoed: the build log is the only record of what
 # happened in that rootfs.

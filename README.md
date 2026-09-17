@@ -32,6 +32,16 @@ $ WBDEV_TARGET=trixie-armhf WBDEV_BUILD_METHOD=qemuchroot WBDEV_TESTING_SETS=<se
       env BUILD_AND_REQUIRE_NODEJS=24 scripts/build.sh zigbee2mqtt <version> ./zigbee2mqtt ./result
 ```
 
+The amd64 target has no rootfs in devenv: it is built in the devenv container itself, which
+is trixie amd64, and takes its Node.js from the dev-tools repository, the only Wiren Board
+repository in the image. The package it produces goes to dev-tools too, for development
+machines, not to the release repository the controllers take theirs from:
+
+```console
+$ WBDEV_TARGET=trixie-amd64 wbdev root \
+      env BUILD_AND_REQUIRE_NODEJS=24 bash scripts/build.sh zigbee2mqtt <version> ./zigbee2mqtt ./result
+```
+
 To check the package the build produced, on the same rootfs and the same Node.js:
 
 ```console
