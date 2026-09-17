@@ -1,4 +1,8 @@
-#!/bin/sh -e
+#!/bin/sh
+# Runs on the controller after an upgrade has unpacked the new package.
+# fpm inlines this file into the body of a function of the generated maintainer script, so the
+# shebang and any `set` here would have no effect, and a failing command does not stop the upgrade.
+# That is why every step below reports for itself.
 
 CONFIG_FILE=/mnt/data/root/zigbee2mqtt/data/configuration.yaml
 
@@ -6,33 +10,33 @@ CONFIG_FILE=/mnt/data/root/zigbee2mqtt/data/configuration.yaml
 # Done first so that the config is safe even if a later step (pnpm install) fails;
 # successful mv also removes .wb-old, preventing a stale backup from leaking
 # into the next upgrade.
-if [ -e "$CONFIG_FILE.wb-old" ]; then
+if [ -e "${CONFIG_FILE}.wb-old" ]; then
     echo "Restoring configuration file after upgrade"
-    mv "$CONFIG_FILE.wb-old" "$CONFIG_FILE"
+    mv "${CONFIG_FILE}.wb-old" "${CONFIG_FILE}"
 fi
 
 echo "Adding dependencies for pnpm"
 # Dependencies already included in .deb — this just prevents runtime issues
 pnpm install --prod --frozen-lockfile --force --prefix /mnt/data/root/zigbee2mqtt
 
-if ! grep -Pzq 'serial:\n(  .*\n)*  adapter: zstack' $CONFIG_FILE; then
-  LINE=$(awk '
-    /^serial:/ { inside=1; next }
-    inside && /^[^ ]/ { exit }
-    inside { last_line = NR }
-    END { print last_line }
-  ' "$CONFIG_FILE")
+if ! grep -Pzq 'serial:\n(  .*\n)*  adapter: zstack' "${CONFIG_FILE}"; then
+    LINE=$(awk '
+        /^serial:/ { inside=1; next }
+        inside && /^[^ ]/ { exit }
+        inside { last_line = NR }
+        END { print last_line }
+    ' "${CONFIG_FILE}")
 
-  if [ -n "$LINE" ]; then
-    sed -i "${LINE}a \  adapter: zstack" $CONFIG_FILE
-  else
-    sed -i "/^serial:/a \  adapter: zstack" $CONFIG_FILE
-  fi
-  echo "zstack adapter type added to the configuration file"
+    if [ -n "${LINE}" ]; then
+        sed -i "${LINE}a \  adapter: zstack" "${CONFIG_FILE}"
+    else
+        sed -i "/^serial:/a \  adapter: zstack" "${CONFIG_FILE}"
+    fi
+    echo "zstack adapter type added to the configuration file"
 fi
 
-if ! grep -q '^availability:' "$CONFIG_FILE"; then
-  cat >> "$CONFIG_FILE" <<'EOF'
+if ! grep -q '^availability:' "${CONFIG_FILE}"; then
+    cat >> "${CONFIG_FILE}" <<'EOF'
 availability:
   enabled: true
   active:
@@ -40,5 +44,5 @@ availability:
     max_jitter: 30000
     backoff: true
 EOF
-  echo "availability section added to the configuration file"
+    echo "availability section added to the configuration file"
 fi
