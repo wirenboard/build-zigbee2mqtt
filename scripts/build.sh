@@ -2,7 +2,7 @@
 # Builds the zigbee2mqtt package: installs the Node.js the package will require and the toolchain,
 # builds the application with pnpm and packs the result with fpm.
 # Usage: build.sh <package name> <version> <sources dir> <result dir> [extra fpm flags]
-# Env:   NODEJS_MAJOR_VERSION, the Node.js major to build with and to require, no default
+# Env:   BUILD_AND_REQUIRE_NODEJS, the Node.js major to build with and to require, no default
 #        NPM_REGISTRY, registry override, empty for the default one
 # Exit:  0 package built, 1 a step failed, 2 usage
 #
@@ -31,8 +31,8 @@ parse_arguments() {
 
     # No default: this decides both which Node.js the build runs on and what the package requires,
     # and guessing it for the caller produces a package nobody asked for
-    if [ -z "${NODEJS_MAJOR_VERSION:-}" ]; then
-        echo >&2 "NODEJS_MAJOR_VERSION is not set: the Node.js major the build installs and the"
+    if [ -z "${BUILD_AND_REQUIRE_NODEJS:-}" ]; then
+        echo >&2 "BUILD_AND_REQUIRE_NODEJS is not set: the Node.js major the build installs and the"
         echo >&2 "package requires, for example 24"
         exit 2
     fi
@@ -163,7 +163,7 @@ main() {
     # Node.js first: if the required version is missing, the build fails in seconds instead of
     # after the minutes the toolchain below costs under emulation
     local dependency
-    dependency=$(format_apt_dependency "${NODEJS_MAJOR_VERSION}")
+    dependency=$(format_apt_dependency "${BUILD_AND_REQUIRE_NODEJS}")
     install_nodejs "${dependency}"
     install_toolchain
     enable_pnpm

@@ -14,13 +14,13 @@ zigbee2mqtt package for Wiren Board repository.
 How to build
 ------------
 
-Using devenv (https://github.com/wirenboard/wirenboard). `NODEJS_MAJOR_VERSION` says which
+Using devenv (https://github.com/wirenboard/wirenboard). `BUILD_AND_REQUIRE_NODEJS` says which
 Node.js the build installs and the package then requires; there is no default:
 
 ```console
 $ git clone https://github.com/Koenkk/zigbee2mqtt
 $ WBDEV_TARGET=bullseye-armhf WBDEV_BUILD_METHOD=qemuchroot wbdev chroot \
-      env NODEJS_MAJOR_VERSION=22 scripts/build.sh zigbee2mqtt <version> ./zigbee2mqtt ./result
+      env BUILD_AND_REQUIRE_NODEJS=22 scripts/build.sh zigbee2mqtt <version> ./zigbee2mqtt ./result
 $ # .deb files are in result/ dir
 ```
 
@@ -29,12 +29,12 @@ add their names:
 
 ```console
 $ WBDEV_TARGET=trixie-armhf WBDEV_BUILD_METHOD=qemuchroot WBDEV_TESTING_SETS=<set>[,<set>...] wbdev chroot \
-      env NODEJS_MAJOR_VERSION=24 scripts/build.sh zigbee2mqtt <version> ./zigbee2mqtt ./result
+      env BUILD_AND_REQUIRE_NODEJS=24 scripts/build.sh zigbee2mqtt <version> ./zigbee2mqtt ./result
 ```
 
 To check the package the build produced, on the same rootfs and the same Node.js:
 
 ```console
 $ WBDEV_TARGET=trixie-armhf WBDEV_BUILD_METHOD=qemuchroot wbdev chroot \
-      env NODEJS_MAJOR_VERSION=24 scripts/test-deb.sh ./result
+      env BUILD_AND_REQUIRE_NODEJS=24 scripts/test-deb.sh ./result
 ```

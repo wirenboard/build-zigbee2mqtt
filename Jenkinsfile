@@ -20,9 +20,9 @@ pipeline {
         string(name: 'WBDEV_TESTING_SETS', defaultValue: '',
                 description: 'Comma-separated testing set names: their experimental.<name> repositories are added to the rootfs above testing and unstable, so packages from them win. Trixie targets only. With UPLOAD_TO_POOL only for an ~exp~ version, which reaches testing sets and nothing else')
         choice(name: 'WBDEV_TARGET', choices: ['trixie-armhf', 'trixie-arm64', 'bullseye-armhf', 'bullseye-arm64'], description: 'Target architecture')
-        choice(name: 'NODEJS_MAJOR_VERSION',
+        choice(name: 'BUILD_AND_REQUIRE_NODEJS',
                 choices: ['24', '22', '16'],
-                description: '''Node.js major the build installs and the package requires. scripts/build.sh turns it into an apt dependency, 24 becomes nodejs (>= 24), nodejs (<< 25):
+                description: '''The package is built on this Node.js major and pinned to it: scripts/build.sh turns 24 into nodejs (>= 24), nodejs (<< 25), so the package refuses to install on another major. The reason is unix-dgram, a native module built for the ABI of that Node.js:
 - 24 (default): trixie only, Node 24 needs glibc 2.38. A version the repositories do not have yet comes from WBDEV_TESTING_SETS
 - 22: from the Wiren Board repositories, trixie and bullseye
 - 16: the separate nodejs-16 package, for zigbee2mqtt 1.18.1''')
@@ -69,8 +69,8 @@ pipeline {
                     }
                 }
 
-                if (params.WBDEV_TARGET.startsWith('bullseye') && params.NODEJS_MAJOR_VERSION.toInteger() >= 24) {
-                    error("NODEJS_MAJOR_VERSION=${params.NODEJS_MAJOR_VERSION} for ${params.WBDEV_TARGET}: Node.js 24 needs glibc 2.38, bullseye has 2.31")
+                if (params.WBDEV_TARGET.startsWith('bullseye') && params.BUILD_AND_REQUIRE_NODEJS.toInteger() >= 24) {
+                    error("BUILD_AND_REQUIRE_NODEJS=${params.BUILD_AND_REQUIRE_NODEJS} for ${params.WBDEV_TARGET}: Node.js 24 needs glibc 2.38, bullseye has 2.31")
                 }
 
                 def repoType = params.USE_TESTING_REPOSITORY ? "testing" : "stable"
@@ -78,7 +78,7 @@ pipeline {
                 if (params.TAG) {
                     buildName += " custom_tag=${params.TAG}"
                 }
-                def description = "Build on Node.js ${params.NODEJS_MAJOR_VERSION} for ${params.WBDEV_TARGET}"
+                def description = "Build on Node.js ${params.BUILD_AND_REQUIRE_NODEJS} for ${params.WBDEV_TARGET}"
 
                 def testingSets = params.WBDEV_TESTING_SETS.trim()
                 if (testingSets) {
@@ -176,7 +176,7 @@ pipeline {
                 sh "printenv | sort"
                 sh "wbdev root printenv | sort"
                 sh """wbdev chroot bash -c \\
-                          "NODEJS_MAJOR_VERSION='${params.NODEJS_MAJOR_VERSION}' \\
+                          "BUILD_AND_REQUIRE_NODEJS='${params.BUILD_AND_REQUIRE_NODEJS}' \\
                           NPM_REGISTRY='${params.NPM_REGISTRY}' \\
                           scripts/build.sh ${name} ${VERSION} ${PROJECT_SUBDIR} ${RESULT_SUBDIR} ${specialParams}" """
             }}
@@ -194,7 +194,7 @@ pipeline {
         stage('Test deb') {
             steps {
                 sh """wbdev chroot bash -c \\
-                          "NODEJS_MAJOR_VERSION='${params.NODEJS_MAJOR_VERSION}' \\
+                          "BUILD_AND_REQUIRE_NODEJS='${params.BUILD_AND_REQUIRE_NODEJS}' \\
                           scripts/test-deb.sh ${RESULT_SUBDIR}" """
             }
             post {

@@ -2,7 +2,7 @@
 # Checks the built zigbee2mqtt package before it goes anywhere: control fields, contents, and that
 # the native modules inside it load on the Node.js the package requires.
 # Usage: test-deb.sh <result dir>
-# Env:   NODEJS_MAJOR_VERSION, the major the package has to depend on
+# Env:   BUILD_AND_REQUIRE_NODEJS, the major the package has to depend on
 # Exit:  0 all checks passed, 1 a check failed, 2 usage or a broken suite list
 #
 # Runs inside `wbdev chroot` right after build.sh, where that Node.js is already installed.
@@ -20,7 +20,7 @@ parse_arguments() {
     [ $# -eq 1 ] || usage
     RESULT_DIR=$1
     [ -d "${RESULT_DIR}" ] || { echo "${RESULT_DIR}: no such directory" >&2; exit 2; }
-    [ -n "${NODEJS_MAJOR_VERSION:-}" ] || { echo "NODEJS_MAJOR_VERSION is not set" >&2; exit 2; }
+    [ -n "${BUILD_AND_REQUIRE_NODEJS:-}" ] || { echo "BUILD_AND_REQUIRE_NODEJS is not set" >&2; exit 2; }
     DEB=$(ls -1 "${RESULT_DIR}"/*.deb 2>/dev/null | head -1)
     [ -n "${DEB}" ] || { echo "no .deb in ${RESULT_DIR}: build.sh has to run first" >&2; exit 2; }
     ARCH=$(dpkg --print-architecture)
@@ -70,9 +70,9 @@ module_loads() {
 # The dependency the package must carry. Spelled out here, not taken from build.sh: a test that
 # repeats the code it checks proves nothing
 expected_dependency() {
-    case "${NODEJS_MAJOR_VERSION}" in
+    case "${BUILD_AND_REQUIRE_NODEJS}" in
         16) echo "nodejs-16" ;;
-        *)  echo "nodejs (>= ${NODEJS_MAJOR_VERSION}), nodejs (<< $((NODEJS_MAJOR_VERSION + 1)))" ;;
+        *)  echo "nodejs (>= ${BUILD_AND_REQUIRE_NODEJS}), nodejs (<< $((BUILD_AND_REQUIRE_NODEJS + 1)))" ;;
     esac
 }
 
@@ -240,7 +240,7 @@ main() {
     PASSED=0 FAILED=0 SKIPPED=0 CURRENT=''
     parse_arguments "$@"
     verify_suites
-    echo "checking $(basename "${DEB}") against Node.js ${NODEJS_MAJOR_VERSION}"
+    echo "checking $(basename "${DEB}") against Node.js ${BUILD_AND_REQUIRE_NODEJS}"
 
     section "the .deb file";                   run "${SUITE_DEB}"
     section "install";                         install_package
