@@ -7,9 +7,34 @@ zigbee2mqtt package for Wiren Board repository.
 | Path | What is there |
 |---|---|
 | `Jenkinsfile` | build parameters and the order of the stages |
-| `scripts/build.sh` | installs Node.js and the toolchain, builds with pnpm, packs with fpm |
+| `scripts/build.sh` | installs Node.js and the toolchain, builds with pnpm (`--step build`), packs with fpm (`--step pack`) |
+| `scripts/prune-files.sh` | between the two steps: removes what nobody can use on a controller, and answers `--check` |
 | `scripts/test-deb.sh` | checks the built package before it is uploaded |
 | `package/` | what goes into the package: the service unit, the configuration template, the maintainer scripts |
+
+Files the package does not carry
+-------------------------------
+
+`scripts/prune-files.sh` runs between the build and the packing, in a step of its own, and
+`scripts/build.sh` asks the same script with `--check` before it packs, so a package cannot come
+out with these files in it by accident.
+
+Removed, because nothing on a controller can run or read them:
+
+- `test`, the test suite of zigbee2mqtt: it needs vitest and the other development dependencies,
+  and `pnpm prune --prod` has already removed those;
+- `tsconfig.tsbuildinfo`, the state of an incremental TypeScript compile: there is no compiler on
+  a controller.
+
+Kept for now, with a reason to think first:
+
+| What | Files | Size | Why it is still there |
+|---|---|---|---|
+| `node_modules/**/*.map` | 1622 | 18.6 MB | `index.js` turns source maps on with `setSourceMapsEnabled(true)`, and 1230 of these belong to zigbee-herdsman and its converters: without them a stack trace names a position in the compiled bundle instead of a line of the original TypeScript |
+| `node_modules/**/*.d.ts` | 1126 | 8.7 MB | type definitions, read only by the TypeScript compiler |
+| `*.md` | 211 | 3.8 MB | readme and changelog texts, readable by a person |
+
+Licence texts stay everywhere: they have to travel with the code.
 
 The configuration on the controller
 -----------------------------------

@@ -168,8 +168,7 @@ test_contents() {
           "$(grep -c '/\.git[a-z]' <<<"${contents}") files"
 }
 
-# scripts/prune-files.sh removes what nobody can use on a controller, in a step of its own, and
-# build.sh checks that it happened before it packs. Here the result is checked in the package.
+# The result of the cleanup step, checked in the package itself.
 # Checks:
 #   - no test suite, no state of an incremental TypeScript compile
 # Does not check:

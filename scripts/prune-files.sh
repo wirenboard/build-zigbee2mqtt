@@ -1,30 +1,12 @@
 #!/bin/bash
 # Removes the files of the built application that nobody can use on a controller.
 # Usage: prune-files.sh [--check] <tree>
-#   --check  remove nothing, only say whether the tree is already clean. build.sh asks this before
-#            it packs, so a package cannot quietly come out with these files in it
-#   tree     the built zigbee2mqtt, the directory that holds dist, node_modules and package.json
+#   --check  remove nothing, only say whether the tree is already clean
+#   tree     the built zigbee2mqtt: the directory with dist, node_modules and package.json
 # Runs on the build agent, never on a controller.
 # Exit: 0 done, 1 no such tree or a failed check, 2 usage
 #
-# Only what cannot run or be read there at all:
-#   test                     the test suite of zigbee2mqtt. It needs vitest and the rest of the
-#                            development dependencies, and "pnpm prune --prod" has removed them,
-#                            so nothing here can run on a controller
-#   tsconfig.tsbuildinfo     the state of an incremental TypeScript compile. There is no compiler
-#                            on a controller, and the file means nothing without one
-#
-# Candidates for later, each with a reason to think first:
-#   node_modules/**/*.d.ts   1126 files, 8.7 MB. Type definitions, read only by the TypeScript
-#                            compiler, which a controller does not have
-#   *.md                     211 files, 3.8 MB of readme and changelog texts, readable by a person
-#   node_modules/**/*.map    1622 files, 18.6 MB. Source maps, and index.js turns them on with
-#                            setSourceMapsEnabled(true): 1230 of them belong to zigbee-herdsman
-#                            and its converters, and they are what makes a stack trace name a line
-#                            of the original TypeScript. Removing these costs readable traces
-#
-# node_modules keeps the layout of pnpm, where the real files live under ".pnpm" and the names
-# beside it are symbolic links, so find without -L meets every file once.
+# What is removed, what is kept and why: README.md, "Files the package does not carry"
 
 set -euo pipefail
 
