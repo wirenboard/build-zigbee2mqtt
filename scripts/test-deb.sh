@@ -5,7 +5,9 @@
 # Env:   BUILD_AND_REQUIRE_NODEJS, the major the package has to depend on
 # Exit:  0 all checks passed, 1 a check failed (the summary names it), 2 usage or a broken suite list
 #
-# Runs inside `wbdev chroot` right after build.sh, where that Node.js is already installed.
+# Runs inside "wbdev chroot" right after build.sh, in a rootfs of its own: apt installs the
+# Node.js again here, by the dependency of the package, so it is the same version and not the
+# same files the build used.
 # One test is one function named test_*; the suites at the bottom say which of them run and in
 # which order. A test listed in no suite stops the run, because a test nobody calls looks like a
 # passing one.
@@ -41,23 +43,42 @@ check() {   # check <what> <expected> <actual>
         PASSED=$((PASSED + 1)); echo "ok    $1: $3"
     else
         FAILED=$((FAILED + 1)); echo "FAIL  $1: got '$3', expected '$2'"
+        # The names are repeated at the end: in Jenkins the tail of the log is what one sees first
+        FAILED_NAMES="${FAILED_NAMES}${FAILED_NAMES:+, }$1"
     fi
 }
 skip()    { SKIPPED=$((SKIPPED + 1)); echo "skip  $1"; }
 info()    { echo "info  $1: $2"; }
 section() { echo; echo "=== $* ==="; }
 
+# run_section <title> <suite>: the tests of one suite, with the time they took
+run_section() {
+    section "$1"
+    started=$(date +%s)
+    for CURRENT in $2; do "${CURRENT}"; done
+    echo "      ${1} took $(( $(date +%s) - started ))s"
+}
+
 ### tools
 
 yes_no()       { if "$@"; then echo yes; else echo no; fi; }
+# The newest released version of a package here: the regular repositories only. A testing set
+# publishes experimental.* suites, and the packages there are builds of a branch, not something a
+# controller would have, so they are no fixture for an upgrade
+released_version_of() {
+    apt-cache madison "$1" 2>/dev/null |
+        grep -v 'experimental\.' |
+        awk -F'|' 'NR == 1 { gsub(/ /, "", $2); print $2 }'
+}
+
 deb_field()    { dpkg-deb --field "${DEB}" "$1"; }
 deb_contents() { dpkg-deb --contents "${DEB}"; }
 # Runs node in the installed application, the way the service does
-in_app()       { ( cd "${APP}" && timeout 120 node -e "$1" 2>&1 ); }
+run_node_in_app()       { ( cd "${APP}" && timeout 120 node -e "$1" 2>&1 ); }
 
 # ok, or the reason the module did not load, out of a multi-line stack
 module_loads() {
-    output=$(in_app "$1")
+    output=$(run_node_in_app "$1")
     if [ "$(tail -1 <<<"${output}")" = ok ]; then
         echo ok
         return
@@ -83,22 +104,47 @@ expected_dependency() {
     esac
 }
 
+# The package that dependency is about: nodejs, or nodejs-16 for that old release
+expected_package() { expected_dependency | sed 's/ .*//'; }
+
+# apt_errors <log>: the lines that say what went wrong, or the tail when there are none
+apt_errors() {
+    if ! grep -E '^(E:|dpkg: )' "$1" | head -10 | sed 's/^/        /' | grep -q .; then
+        tail -10 "$1" | sed 's/^/        /'
+    fi
+}
+
 need_command() {
     command -v "$1" > /dev/null && return 0
     skip "${CURRENT}: no $1 here"
     return 1
 }
 
-# The package is installed for real, as on a controller. In this rootfs there is no systemd, and
-# the maintainer script of a fresh install tolerates that: every systemctl call ends with || true
-install_package() {
+# Writes /usr/sbin/policy-rc.d, the file a maintainer script asks before it starts a service:
+# exit code 101 there means "not allowed", and no file at all means "allowed". Nothing has to run
+# in this rootfs, it has no systemd and the tests read files
+# copies_in <directory>: how many copies of the data are kept there
+copies_in() {
+    find "$1" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l
+}
+
+forbid_service_start() {
     cat > /usr/sbin/policy-rc.d <<'EOF'
 #!/bin/sh
 exit 101
 EOF
     chmod 0755 /usr/sbin/policy-rc.d
+}
+
+# Takes that file away, so services may start again
+allow_service_start() { rm -f /usr/sbin/policy-rc.d; }
+
+# The package is installed for real, as on a controller. In this rootfs there is no systemd, and
+# the maintainer script of a fresh install tolerates that: every systemctl call ends with || true
+install_package() {
+    forbid_service_start
     apt-get install -y "${DEB}" || { echo "FAIL  the package does not install, nothing else can be checked"; exit 1; }
-    rm -f /usr/sbin/policy-rc.d
+    allow_service_start
 }
 
 ### the package itself
@@ -127,6 +173,65 @@ test_contents() {
           "$(grep -c '/\.git[a-z]' <<<"${contents}") files"
 }
 
+# TEMPORARY, goes away with package/backup-z2m-data.sh.
+# Checks:
+#   - an install over an existing installation leaves one more copy, with the configuration in it
+#   - the next install leaves one more again: earlier copies are not rotated away
+# Does not check:
+#   - a first install: there is no data to copy then
+test_data_copied_to_var_backups() {
+    backups=/var/backups/zigbee2mqtt
+    before=$(copies_in "${backups}")
+    forbid_service_start
+    mkdir -p "${APP}/data"
+    echo "wb-backup-marker" >> "${APP}/data/configuration.yaml"
+
+    apt-get install -y --reinstall "${DEB}" > /tmp/backup-install.log 2>&1 ||
+        apt_errors /tmp/backup-install.log
+    check "an install leaves one more copy" "$((before + 1))" "$(copies_in "${backups}")"
+    check "the configuration is in it"      "yes" \
+          "$(yes_no grep -rq 'wb-backup-marker' "${backups}")"
+
+    apt-get install -y --reinstall "${DEB}" > /tmp/backup-install.log 2>&1 ||
+        apt_errors /tmp/backup-install.log
+    check "the next install adds one more"  "$((before + 2))" "$(copies_in "${backups}")"
+
+    sed -i '/wb-backup-marker/d' "${APP}/data/configuration.yaml"
+    allow_service_start
+}
+
+# The result of the cleanup step, checked in the package itself.
+# Checks:
+#   - no test suite, no state of an incremental TypeScript compile
+# Does not check:
+#   - source maps, type definitions and markdown texts: they stay for now, and how many of them
+#     the package carries is printed below
+test_developer_files_not_packaged() {
+    contents=$(deb_contents)
+    check "no test suite"            "0" "$(grep -c "\.${APP}/test/" <<<"${contents}")"
+    check "no incremental build state" "0" \
+          "$(grep -c 'tsconfig\.tsbuildinfo$' <<<"${contents}")"
+    info  "source maps kept"         "$(grep -c '\.map$' <<<"${contents}") files"
+    info  "type definitions kept"    "$(grep -c '\.d\.ts$' <<<"${contents}") files"
+    info  "markdown kept"            "$(grep -c '\.md$' <<<"${contents}") files"
+}
+
+# The runtime configuration belongs to the controller, not to the package: as a conffile it made
+# dpkg ask whether to replace a file zigbee2mqtt rewrites itself, and "replace" wiped the network
+test_config_is_not_packaged() {
+    contents=$(deb_contents)
+    check "no conffiles declared" "" \
+          "$(dpkg-deb -I "${DEB}" conffiles 2>/dev/null | tr -d '[:space:]')"
+    check "the runtime configuration is not in the package" "0" \
+          "$(grep -c '/zigbee2mqtt/data/configuration\.yaml$' <<<"${contents}")"
+    check "the template is"                 "yes" \
+          "$(yes_no grep -q '/usr/share/zigbee2mqtt/configuration\.default\.yaml$' <<<"${contents}")"
+    check "setup-z2m-config.sh is"              "yes" \
+          "$(yes_no grep -q '/usr/lib/zigbee2mqtt/setup-z2m-config\.sh$' <<<"${contents}")"
+    check "setup-z2m-config.sh is executable"   "yes" \
+          "$(yes_no grep -qE '^-rwx.*setup-z2m-config\.sh$' <<<"${contents}")"
+}
+
 test_dependencies_resolvable() {
     plan=$(apt-get install -s "${DEB}" 2>&1)
     grep -E '^(Inst|Remv) ' <<<"${plan}" | sed 's/^/      /'
@@ -139,17 +244,62 @@ test_installed_version() {
     check "installed version" "$(deb_field Version)" "$(dpkg-query -W -f='${Version}' zigbee2mqtt 2>/dev/null)"
 }
 
-# fpm writes md5sums, so dpkg can tell whether the files on disk are the ones from the package
+# dpkg_path_globs exclude|include: the globs of the dpkg configuration, one per line. A rootfs
+# tells dpkg what to leave out of every package ("exclude") and what to keep anyway ("include")
+dpkg_path_globs() {
+    cat /etc/dpkg/dpkg.cfg /etc/dpkg/dpkg.cfg.d/* 2>/dev/null |
+        sed -n "s/^[[:space:]]*path-$1[[:space:]]*=\{0,1\}[[:space:]]*//p"
+}
+
+# path_matches <path> <globs>: true when the path fits one of the globs
+path_matches() {
+    for glob in $2; do
+        case "$1" in ${glob}) return 0 ;; esac
+    done
+    return 1
+}
+
+# verify_lines_about_kept_files <package>: the lines of "dpkg -V" about files this rootfs was
+# allowed to unpack
+verify_lines_about_kept_files() {
+    excluded=$(dpkg_path_globs exclude)
+    included=$(dpkg_path_globs include)
+    # The globs are here to be matched, not to be expanded against this filesystem
+    set -f
+    dpkg -V "$1" 2>&1 | while read -r line; do
+        path=${line##* }
+        if path_matches "${path}" "${included}" || ! path_matches "${path}" "${excluded}"; then
+            echo "${line}"
+        fi
+    done
+    set +f
+}
+
+# Asks dpkg whether the files on disk are the ones from the package: fpm writes md5sums for that.
+# Checks:
+#   - every line "dpkg -V" prints, because a missing file still leaves its exit code at zero
+# Does not check:
+#   - manuals, documentation and most translations: the rootfs of a controller and the rootfs of
+#     this build both tell dpkg to leave them out of every package ("path-exclude"), and dpkg then
+#     calls them missing. What such a rule lets through ("path-include") is checked
+#   - "data/configuration.yaml", which the package no longer ships: it belongs to the controller
 test_files_intact() {
-    rc=0
-    listed=$(dpkg -V zigbee2mqtt 2>&1) || rc=$?
+    excluded=$(dpkg_path_globs exclude | tr '\n' ' ')
+    included=$(dpkg_path_globs include | tr '\n' ' ')
+    [ -z "${excluded}" ] || info "paths this rootfs does not unpack" "${excluded}"
+    [ -z "${included}" ] || info "paths it keeps anyway"           "${included}"
+    listed=$(verify_lines_about_kept_files zigbee2mqtt)
     [ -z "${listed}" ] || sed 's/^/        /' <<<"${listed}"
-    check "files intact" "0" "${rc}"
+    check "files dpkg finds changed or missing" "0" "$(grep -c '[^[:space:]]' <<<"${listed}")"
 }
 
 # git describe can name a version the tree does not carry, and fpm would package it anyway
 test_version_matches_sources() {
+    need_command node || return 0
     in_sources=$(node -p "require('${APP}/package.json').version")
+    # An empty value would turn the comparison below into a match against any version
+    check "the version in package.json" "yes" "$(yes_no test -n "${in_sources}")"
+    [ -n "${in_sources}" ] || return 0
     check "the package version starts with the version in package.json" "yes" \
           "$(yes_no grep -q "^${in_sources}" <<<"$(deb_field Version)")"
 }
@@ -167,11 +317,28 @@ test_service_unit_installed() {
           "$(yes_no test -f /lib/systemd/system/zigbee2mqtt.service)"
 }
 
+# Nothing ships the file, so the install has to create it from the template
+test_config_created_on_install() {
+    config=${APP}/data/configuration.yaml
+    template=/usr/share/zigbee2mqtt/configuration.default.yaml
+    check "the configuration is created on install" "yes" "$(yes_no test -e "${config}")"
+    [ -e "${config}" ] || return 0
+    check "it matches the template" "yes" \
+          "$(yes_no cmp -s "${config}" "${template}")"
+}
+
 ### the application itself
 
-# The one check that covers the whole tree: a runtime dependency dropped by `pnpm prune --prod`,
-# a half-built dist or an API the Node.js of this build does not have show up here and nowhere else
-test_application_starts() {
+# Starts the application from the package and waits for its first log line.
+# Checks:
+#   - a module that "pnpm prune --prod" removed, but the code still needs it
+#   - files that are missing in "dist/", because "pnpm run build" did not finish
+#   - an API that this version of Node.js does not have
+# Does not check:
+#   - syslog: the configuration in the package writes logs to the console and to a file, so
+#     "winston-syslog" and its "unix-dgram" are not loaded, and a broken "unix-dgram" would not fail
+#     this test. That module is checked in test_unix_dgram_loads
+test_smoke_start() {
     need_command node || return 0
     log=$( cd "${APP}" && timeout 120 node index.js 2>&1 | head -40 )
     check "zigbee2mqtt gets to its own logging" "yes" \
@@ -187,8 +354,12 @@ test_node_abi() {
          "$(node -p 'process.version + ", NODE_MODULE_VERSION " + process.versions.modules')"
 }
 
-# unix-dgram is built from source against the ABI of the Node.js used here, and winston-syslog
-# loads it on the first log line. A module for another major stops zigbee2mqtt at start
+# Loads "unix-dgram" the way "winston-syslog" loads it: the module is built from source against the
+# ABI of one Node.js major, and a module for another major stops zigbee2mqtt at the first log line.
+# Checks:
+#   - the module built here loads on the Node.js this package requires
+# Does not check:
+#   - logging to syslog itself, which needs a running service and a syslog socket
 test_unix_dgram_loads() {
     need_command node || return 0
     check "unix-dgram loads the way winston-syslog loads it" "ok" \
@@ -206,30 +377,94 @@ test_serialport_binding_loads() {
                      console.log("ok")')"
 }
 
+### the upgrade from the repositories
+
+# Installs the released version, marks its configuration and upgrades to the package built here.
+# The configuration has to survive: this package does not ship it, so dpkg has nothing to replace,
+# and the maintainer scripts must not touch a file that is already there.
+# Checks:
+#   - the upgrade really happens: the version before is the released one, the version after is the
+#     one from this build
+#   - the configuration file is the same after the upgrade, byte for byte
+# Does not check:
+#   - an upgrade from a version older than the repositories carry
+#   - a downgrade to the released version, which does ask about the configuration: the file our
+#     package creates belongs to no package, and dpkg has a question about that
+test_upgrade_keeps_config() {
+    config_path=${APP}/data/configuration.yaml
+    version_built_here=$(deb_field Version)
+
+    # What this rootfs has and where from: with a testing set connected there is an experimental.*
+    # line here too, and the log has to show which of them the version below came from
+    echo "      zigbee2mqtt in the repositories of this rootfs:"
+    apt-cache policy zigbee2mqtt 2>/dev/null | sed 's/^/        /'
+
+    version_to_upgrade_from=$(released_version_of zigbee2mqtt)
+    if [ -z "${version_to_upgrade_from}" ] || [ "${version_to_upgrade_from}" = "${version_built_here}" ]; then
+        skip "${CURRENT}: no released zigbee2mqtt in the repositories of this rootfs"
+        return 0
+    fi
+    info "the version to upgrade from" "${version_to_upgrade_from}"
+
+    forbid_service_start
+    # From a rootfs that has neither this package nor the configuration it creates: the released
+    # version ships that file as a conffile, and dpkg would stop to ask about a file it does not own
+    apt-get purge -y zigbee2mqtt > /tmp/purge.log 2>&1
+    rm -f "${config_path}"
+
+    if ! apt-get install -y "zigbee2mqtt=${version_to_upgrade_from}" > /tmp/from-repo.log 2>&1; then
+        apt_errors /tmp/from-repo.log
+        check "the released version installs" "yes" "no"
+        allow_service_start
+        return 0
+    fi
+    check "installed before the upgrade" "${version_to_upgrade_from}" \
+          "$(dpkg-query -W -f='${Version}' zigbee2mqtt)"
+
+    printf '\n# wb-upgrade-marker\n' >> "${config_path}"
+    cp "${config_path}" "${config_path}.before-upgrade"
+
+    apt-get install -y "${DEB}" > /tmp/upgrade.log 2>&1 || apt_errors /tmp/upgrade.log
+    check "installed after the upgrade" "${version_built_here}" \
+          "$(dpkg-query -W -f='${Version}' zigbee2mqtt)"
+    check "the marker survives the upgrade" "yes" \
+          "$(yes_no grep -q 'wb-upgrade-marker' "${config_path}")"
+    check "the configuration is the same file" "yes" \
+          "$(yes_no cmp -s "${config_path}.before-upgrade" "${config_path}")"
+    cmp -s "${config_path}.before-upgrade" "${config_path}" ||
+        diff -u "${config_path}.before-upgrade" "${config_path}" | head -20 | sed 's/^/        /'
+
+    rm -f "${config_path}.before-upgrade"
+    sed -i '/wb-upgrade-marker/d' "${config_path}"
+    allow_service_start
+}
+
 ### the suites, in the order they run
 
 SUITE_DEB="test_control_fields
            test_depends_on_expected_node
            test_contents
+           test_developer_files_not_packaged
+           test_config_is_not_packaged
            test_dependencies_resolvable"
 
 SUITE_INSTALLED="test_installed_version
                  test_files_intact
+                 test_data_copied_to_var_backups
                  test_version_matches_sources
                  test_size_within_bounds
-                 test_service_unit_installed"
+                 test_service_unit_installed
+                 test_config_created_on_install"
 
-SUITE_APPLICATION="test_application_starts"
+SUITE_APPLICATION="test_smoke_start"
 
 SUITE_MODULES="test_node_abi
                test_unix_dgram_loads
                test_serialport_binding_loads"
 
-ALL_SUITES="${SUITE_DEB} ${SUITE_INSTALLED} ${SUITE_APPLICATION} ${SUITE_MODULES}"
+SUITE_UPGRADE="test_upgrade_keeps_config"
 
-run() {
-    for CURRENT in $1; do "${CURRENT}"; done
-}
+ALL_SUITES="${SUITE_DEB} ${SUITE_INSTALLED} ${SUITE_APPLICATION} ${SUITE_MODULES} ${SUITE_UPGRADE}"
 
 # A test in no suite would never run and nothing in the counts would show it
 verify_suites() {
@@ -244,7 +479,7 @@ verify_suites() {
 ### main
 
 main() {
-    PASSED=0 FAILED=0 SKIPPED=0 CURRENT=''
+    PASSED=0 FAILED=0 SKIPPED=0 CURRENT='' FAILED_NAMES=''
     parse_arguments "$@"
     verify_suites
     echo "checking $(basename "${DEB}") against Node.js ${BUILD_AND_REQUIRE_NODEJS}"
@@ -255,16 +490,22 @@ main() {
     # are written into the rootfs by wbdev before this script runs
     apt-get update
     echo "Node.js available for the install:"
-    apt-cache policy nodejs
+    apt-cache policy "$(expected_package)"
 
-    section "the .deb file";                   run "${SUITE_DEB}"
-    section "install";                         install_package
-    section "the installed package";           run "${SUITE_INSTALLED}"
-    section "native modules on this Node.js";  run "${SUITE_MODULES}"
-    section "the application";                 run "${SUITE_APPLICATION}"
+    run_section "the .deb file"                  "${SUITE_DEB}"
+    section     "install";                       install_package
+    run_section "the installed package"          "${SUITE_INSTALLED}"
+    run_section "native modules on this Node.js" "${SUITE_MODULES}"
+    run_section "the application"                "${SUITE_APPLICATION}"
+    # Last: it replaces the installed package twice, and the tests above expect the one built here
+    run_section "upgrade from the repositories"  "${SUITE_UPGRADE}"
 
     echo
-    echo "=== ${PASSED} passed, ${FAILED} failed, ${SKIPPED} skipped ==="
+    [ -z "${FAILED_NAMES}" ] || echo "=== failed: ${FAILED_NAMES} ==="
+    summary="${PASSED} passed, ${FAILED} failed, ${SKIPPED} skipped"
+    echo "=== ${summary} ==="
+    # The Jenkinsfile puts this line into the description of the build
+    echo "${summary}" > "${RESULT_DIR}/test-summary.txt" 2>/dev/null || true
     [ "${FAILED}" -eq 0 ]
 }
 

@@ -36,7 +36,14 @@ String exitMeaning(String script, int code) {
             return entry.substring(space + 1)
         }
     }
-    return 'the header of the script does not list this code'
+    return 'not a code of the script: under set -e the code of the command that failed goes out as it is'
+}
+
+// The arguments of build.sh, the same for both of its steps
+String buildArguments() {
+    String special = params.VERSION_TO_NAME
+        ? "--provides zigbee2mqtt --conflicts zigbee2mqtt --replaces zigbee2mqtt" : ""
+    return "${env.PKG_NAME} ${env.VERSION} ${env.PROJECT_SUBDIR} ${env.RESULT_SUBDIR} ${special}"
 }
 
 // Runs one of scripts/ where this target is built, with the variables that script reads.
@@ -53,17 +60,40 @@ void runScript(String script, String variables, String args) {
 // for development machines and goes to dev-tools. Each repository has its own testing sets, named
 // by its own config: a set published with the release config serves armhf and arm64, a set that
 // has to serve amd64 lives in dev-tools. wb.repos gives the upload job and the aptly config
+// The pool lives in a public bucket, so a build can look into it before it spends an hour
+// compiling. wbci-repo does not fail on a version it already has: it logs "already exists in
+// pool", skips the file and leaves the stage green, so a repeat upload changes nothing there.
+// Returns the versions of this package for this architecture that are in the pool now, oldest
+// first; the order is sort -V, good enough to name the newest in a log line
+List poolVersions(String poolPrefix, String pkg, String arch) {
+    String suffix = "_${arch}.deb"
+    String bucket = 'https://s3-eu-west-1.amazonaws.com/deb.wirenboard.com'
+    String listing = sh(returnStdout: true, script:
+        "curl -sS --max-time 60 '${bucket}?list-type=2" +
+        "&prefix=${poolPrefix}/pool/main/${pkg[0]}/${pkg}/'" +
+        " | grep -oE '<Key>[^<]+' | sed 's|.*/||' | sort -V").trim()
+
+    // The bucket holds a twin of every ~exp~ upload, with the pluses of the version turned
+    // into spaces: same size, same content, another key. One of the two is enough here
+    return listing.split('\n')
+        .findAll { it.startsWith("${pkg}_") && it.endsWith(suffix) && !it.contains(' ') }
+        .collect { it[(pkg.length() + 1)..-(suffix.length() + 1)] }
+        .unique()
+}
+
 Map targetRepo() {
     if (params.WBDEV_TARGET.endsWith('-amd64')) {
         return [name:              'dev-tools',
                 uploadJob:         wb.repos.devTools.uploadJob,
                 aptlyConfig:       wb.repos.devTools.aptlyConfig,
-                testingSetsConfig: 'testing-sets-devtools-aptly-config']
+                testingSetsConfig: 'testing-sets-devtools-aptly-config',
+                poolPrefix:        'dev-tools']
     }
     return [name:              'release',
             uploadJob:         wb.repos.release.uploadJob,
             aptlyConfig:       wb.repos.release.aptlyConfig,
-            testingSetsConfig: 'testing-sets-release-aptly-config']
+            testingSetsConfig: 'testing-sets-release-aptly-config',
+            poolPrefix:        'all']
 }
 
 // The devenv image of the target release, unless the parameter names another one
@@ -131,8 +161,8 @@ pipeline {
         PROJECT_SUBDIR = 'zigbee2mqtt'
         RESULT_SUBDIR = 'result'
 
-        // The place the build runs, shared by Build and Test deb: the package is checked on the
-        // very Node.js it was built with
+        // The place the build runs. Test deb uses the same method, so the package is checked on a
+        // rootfs of the same kind, with the Node.js of the same version installed anew by apt
         WBDEV_BUILD_METHOD = "qemuchroot"
         WBDEV_USE_UNSTABLE_DEPS = "${unstableDeps()}"
         // Initialize params as envvars, workaround for bug https://issues.jenkins-ci.org/browse/JENKINS-41929
@@ -278,25 +308,84 @@ pipeline {
                     suffix = env.WB_VERSION_SUFFIX
                 }
                 env.VERSION = env.PURE_VERSION + params.WB_REVISION + suffix
+                env.PKG_NAME = 'zigbee2mqtt'
+                if (params.VERSION_TO_NAME) {
+                    env.PKG_NAME = "zigbee2mqtt-${env.PURE_VERSION}"
+                }
                 echo "Pure version: $PURE_VERSION"
                 echo "Version with suffix: $VERSION"
             }}}
         }
-        stage('Build') {
+        // What the pool has now, and what this build would do to it. Before the long part, because
+        // an upload that silently changes nothing is worth knowing about before the build, not after
+        stage('Check the version in the pool') {
             steps { script {
-                def name = "zigbee2mqtt"
-                def specialParams = ""
-                if (params.VERSION_TO_NAME) {
-                    name = "zigbee2mqtt-${PURE_VERSION}"
-                    specialParams = "--provides zigbee2mqtt --conflicts zigbee2mqtt --replaces zigbee2mqtt"
+                Map repo = targetRepo()
+                String arch = params.WBDEV_TARGET.tokenize('-').last()
+                List versions = poolVersions(repo.poolPrefix, env.PKG_NAME, arch)
+
+                if (versions.isEmpty()) {
+                    echo "Pool of ${repo.name}: no ${env.PKG_NAME} for ${arch} there yet"
+                } else {
+                    // The whole list, so the log keeps what the pool held at the time of this build
+                    echo "Pool of ${repo.name}, ${versions.size()} ${env.PKG_NAME} ${arch} package(s):\n  " +
+                         versions.join('\n  ')
+                    echo "Newest in the pool: ${versions.last()}"
                 }
 
+                boolean inPool = versions.contains(env.VERSION)
+                if (!inPool && params.UPLOAD_TO_POOL) {
+                    echo "${env.VERSION} is not there: this build adds it"
+                } else if (!inPool) {
+                    echo "${env.VERSION} is not there, and this build does not upload"
+                } else if (!params.UPLOAD_TO_POOL) {
+                    echo "${env.VERSION} is already there; this build does not upload, so it stays as it is"
+                } else if (params.FORCE_OVERWRITE) {
+                    echo "${env.VERSION} is already there and FORCE_OVERWRITE is on: " +
+                         "this build replaces the package in the pool"
+                } else {
+                    error("${env.VERSION} is already in the pool of ${repo.name}. wbci-repo keeps the " +
+                          "package it already has and skips the new one, so this build would upload " +
+                          "nothing: bump WB_REVISION, or set FORCE_OVERWRITE to replace it.")
+                }
+            }}
+        }
+        stage('Build') {
+            steps { script {
                 sh "printenv | sort"
                 sh "wbdev root printenv | sort"
                 runScript('build.sh',
                           "BUILD_AND_REQUIRE_NODEJS='${params.BUILD_AND_REQUIRE_NODEJS}' " +
                           "NPM_REGISTRY='${params.NPM_REGISTRY}'",
-                          "${name} ${VERSION} ${PROJECT_SUBDIR} ${RESULT_SUBDIR} ${specialParams}")
+                          "--step build ${buildArguments()}")
+            }}
+            post {
+                always {
+                    sh 'wbdev root chown -R jenkins:jenkins .'
+                }
+            }
+        }
+
+        // For now only what nobody can use on a controller at all: the test suite, which has no
+        // vitest to run it there, and the state of an incremental TypeScript compile. The script
+        // names the candidates for later. build.sh asks it with --check before it packs
+        stage('Remove files a controller cannot use') {
+            steps {
+                runScript('prune-files.sh', "", "${PROJECT_SUBDIR}")
+            }
+            post {
+                always {
+                    sh 'wbdev root chown -R jenkins:jenkins .'
+                }
+            }
+        }
+
+        stage('Pack .deb') {
+            steps { script {
+                runScript('build.sh',
+                          "BUILD_AND_REQUIRE_NODEJS='${params.BUILD_AND_REQUIRE_NODEJS}' " +
+                          "NPM_REGISTRY='${params.NPM_REGISTRY}'",
+                          "--step pack ${buildArguments()}")
             }}
             post {
                 always {
@@ -318,6 +407,14 @@ pipeline {
             post {
                 always {
                     sh 'wbdev root chown -R jenkins:jenkins .'
+                    // The counts land on the job page, so the result of the checks is visible
+                    // without opening the log of the stage
+                    script {
+                        String summary = "${RESULT_SUBDIR}/test-summary.txt"
+                        if (fileExists(summary)) {
+                            currentBuild.description += " | tests: ${readFile(summary).trim()}"
+                        }
+                    }
                 }
             }
         }
