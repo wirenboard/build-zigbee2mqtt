@@ -52,45 +52,14 @@ section() { echo; echo "=== $* ==="; }
 ### tools
 
 yes_no()       { if "$@"; then echo yes; else echo no; fi; }
-# The newest version of a package the repositories of this rootfs offer, empty when they have
-# none. Not apt-cache policy: its Candidate is the installed version when nothing in the
-# repositories is newer, and this one has to name a version that came from a repository
-version_in_repositories() { apt-cache madison "$1" 2>/dev/null | awk -F'|' 'NR == 1 { gsub(/ /, "", $2); print $2 }'; }
-deb_field()    { dpkg-deb --field "${DEB}" "$1"; }
-deb_contents() { dpkg-deb --contents "${DEB}"; }
-# Runs node in the installed application, the way the service does
-run_node_in_app()       { ( cd "${APP}" && timeout 120 node -e "$1" 2>&1 ); }
-
-# ok, or the reason the module did not load, out of a multi-line stack
-module_loads() {
-    output=$(run_node_in_app "$1")
-    if [ "$(tail -1 <<<"${output}")" = ok ]; then
-        echo ok
-        return
-    fi
-    flat=$(tr '\n' ' ' <<<"${output}" | tr -s ' ')
-    # A module built for another major is the failure worth naming, and its two numbers say it all
-    # shellcheck disable=SC2046
-    set -- $(grep -o 'NODE_MODULE_VERSION [0-9]*' <<<"${flat}" | awk '{ print $2 }')
-    if [ $# -ge 2 ]; then
-        echo "built for NODE_MODULE_VERSION $1, this Node.js requires $2"
-    else
-        # The path inside the message is long and says nothing here
-        sed "s|'[^']*'|the module|" <<<"${flat}" | grep -o 'Error:.\{0,120\}' || tail -1 <<<"${output}"
-    fi
+# The newest released version of a package here: the regular repositories only. A testing set
+# publishes experimental.* suites, and the packages there are builds of a branch, not something a
+# controller would have, so they are no fixture for an upgrade
+released_version_of() {
+    apt-cache madison "$1" 2>/dev/null |
+        grep -v 'experimental\.' |
+        awk -F'|' 'NR == 1 { gsub(/ /, "", $2); print $2 }'
 }
-
-# The dependency the package must carry. Spelled out here, not taken from build.sh: a test that
-# repeats the code it checks proves nothing
-expected_dependency() {
-    case "${BUILD_AND_REQUIRE_NODEJS}" in
-        16) echo "nodejs-16" ;;
-        *)  echo "nodejs (>= ${BUILD_AND_REQUIRE_NODEJS}), nodejs (<< $((BUILD_AND_REQUIRE_NODEJS + 1)))" ;;
-    esac
-}
-
-# The package that dependency is about: nodejs, or nodejs-16 for that old release
-expected_package() { expected_dependency | sed 's/ .*//'; }
 
 need_command() {
     command -v "$1" > /dev/null && return 0
@@ -272,35 +241,37 @@ test_serialport_binding_loads() {
 
 ### the upgrade from the repositories
 
-# Puts the version from the repositories on top of this one, marks its configuration and upgrades
-# back. The configuration has to survive: the package does not ship it any more, so dpkg has
-# nothing to replace, and the maintainer scripts must not touch a file that is already there.
+# Installs the released version, marks its configuration and upgrades to the package built here.
+# The configuration has to survive: this package does not ship it, so dpkg has nothing to replace,
+# and the maintainer scripts must not touch a file that is already there.
 # Checks:
-#   - the upgrade really happens: the version before is the one from the repositories, the version
-#     after is the one from this build
+#   - the upgrade really happens: the version before is the released one, the version after is the
+#     one from this build
 #   - the configuration file is the same after the upgrade, byte for byte
 # Does not check:
 #   - an upgrade from a version older than the repositories carry
+#   - a downgrade to the released version, which does ask about the configuration: the file our
+#     package creates belongs to no package, and dpkg has a question about that
 test_upgrade_keeps_config() {
     config_path=${APP}/data/configuration.yaml
     version_built_here=$(deb_field Version)
 
-    version_to_upgrade_from=$(version_in_repositories zigbee2mqtt)
-    if [ -z "${version_to_upgrade_from}" ]; then
-        skip "${CURRENT}: no zigbee2mqtt in the repositories of this rootfs"
-        return 0
-    fi
-    if [ "${version_to_upgrade_from}" = "${version_built_here}" ]; then
-        skip "${CURRENT}: the repositories offer the very version built here, nothing to upgrade from"
+    version_to_upgrade_from=$(released_version_of zigbee2mqtt)
+    if [ -z "${version_to_upgrade_from}" ] || [ "${version_to_upgrade_from}" = "${version_built_here}" ]; then
+        skip "${CURRENT}: no released zigbee2mqtt in the repositories of this rootfs"
         return 0
     fi
     info "the version to upgrade from" "${version_to_upgrade_from}"
 
     forbid_service_start
-    if ! apt-get install -y --allow-downgrades "zigbee2mqtt=${version_to_upgrade_from}" \
-             > /tmp/from-repo.log 2>&1; then
+    # From a rootfs that has neither this package nor the configuration it creates: the released
+    # version ships that file as a conffile, and dpkg would stop to ask about a file it does not own
+    apt-get purge -y zigbee2mqtt > /tmp/purge.log 2>&1
+    rm -f "${config_path}"
+
+    if ! apt-get install -y "zigbee2mqtt=${version_to_upgrade_from}" > /tmp/from-repo.log 2>&1; then
         tail -5 /tmp/from-repo.log | sed 's/^/        /'
-        check "the version from the repositories installs" "yes" "no"
+        check "the released version installs" "yes" "no"
         allow_service_start
         return 0
     fi
