@@ -61,6 +61,42 @@ released_version_of() {
         awk -F'|' 'NR == 1 { gsub(/ /, "", $2); print $2 }'
 }
 
+deb_field()    { dpkg-deb --field "${DEB}" "$1"; }
+deb_contents() { dpkg-deb --contents "${DEB}"; }
+# Runs node in the installed application, the way the service does
+run_node_in_app()       { ( cd "${APP}" && timeout 120 node -e "$1" 2>&1 ); }
+
+# ok, or the reason the module did not load, out of a multi-line stack
+module_loads() {
+    output=$(run_node_in_app "$1")
+    if [ "$(tail -1 <<<"${output}")" = ok ]; then
+        echo ok
+        return
+    fi
+    flat=$(tr '\n' ' ' <<<"${output}" | tr -s ' ')
+    # A module built for another major is the failure worth naming, and its two numbers say it all
+    # shellcheck disable=SC2046
+    set -- $(grep -o 'NODE_MODULE_VERSION [0-9]*' <<<"${flat}" | awk '{ print $2 }')
+    if [ $# -ge 2 ]; then
+        echo "built for NODE_MODULE_VERSION $1, this Node.js requires $2"
+    else
+        # The path inside the message is long and says nothing here
+        sed "s|'[^']*'|the module|" <<<"${flat}" | grep -o 'Error:.\{0,120\}' || tail -1 <<<"${output}"
+    fi
+}
+
+# The dependency the package must carry. Spelled out here, not taken from build.sh: a test that
+# repeats the code it checks proves nothing
+expected_dependency() {
+    case "${BUILD_AND_REQUIRE_NODEJS}" in
+        16) echo "nodejs-16" ;;
+        *)  echo "nodejs (>= ${BUILD_AND_REQUIRE_NODEJS}), nodejs (<< $((BUILD_AND_REQUIRE_NODEJS + 1)))" ;;
+    esac
+}
+
+# The package that dependency is about: nodejs, or nodejs-16 for that old release
+expected_package() { expected_dependency | sed 's/ .*//'; }
+
 need_command() {
     command -v "$1" > /dev/null && return 0
     skip "${CURRENT}: no $1 here"
@@ -255,6 +291,11 @@ test_serialport_binding_loads() {
 test_upgrade_keeps_config() {
     config_path=${APP}/data/configuration.yaml
     version_built_here=$(deb_field Version)
+
+    # What this rootfs has and where from: with a testing set connected there is an experimental.*
+    # line here too, and the log has to show which of them the version below came from
+    echo "      zigbee2mqtt in the repositories of this rootfs:"
+    apt-cache policy zigbee2mqtt | sed 's/^/        /'
 
     version_to_upgrade_from=$(released_version_of zigbee2mqtt)
     if [ -z "${version_to_upgrade_from}" ] || [ "${version_to_upgrade_from}" = "${version_built_here}" ]; then
