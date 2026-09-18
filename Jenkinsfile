@@ -55,15 +55,14 @@ void runScript(String script, String variables, String args) {
 // has to serve amd64 lives in dev-tools. wb.repos gives the upload job and the aptly config
 // The pool lives in a public bucket, so a build can look into it before it spends an hour
 // compiling. wbci-repo does not fail on a version it already has: it logs "already exists in
-// pool", skips the file and leaves the stage green, so a repeat upload changes nothing there
-String POOL_BUCKET = 'https://s3-eu-west-1.amazonaws.com/deb.wirenboard.com'
-
-// Versions of this package for this architecture that are in the pool now, oldest first. The
-// order is sort -V, good enough to name the newest in a log line
+// pool", skips the file and leaves the stage green, so a repeat upload changes nothing there.
+// Returns the versions of this package for this architecture that are in the pool now, oldest
+// first; the order is sort -V, good enough to name the newest in a log line
 List poolVersions(String poolPrefix, String pkg, String arch) {
     String suffix = "_${arch}.deb"
+    String bucket = 'https://s3-eu-west-1.amazonaws.com/deb.wirenboard.com'
     String listing = sh(returnStdout: true, script:
-        "curl -sS --max-time 60 '${POOL_BUCKET}?list-type=2" +
+        "curl -sS --max-time 60 '${bucket}?list-type=2" +
         "&prefix=${poolPrefix}/pool/main/${pkg[0]}/${pkg}/'" +
         " | grep -oE '<Key>[^<]+' | sed 's|.*/||' | sort -V").trim()
 
