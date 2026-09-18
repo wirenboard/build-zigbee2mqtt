@@ -123,6 +123,11 @@ need_command() {
 # Writes /usr/sbin/policy-rc.d, the file a maintainer script asks before it starts a service:
 # exit code 101 there means "not allowed", and no file at all means "allowed". Nothing has to run
 # in this rootfs, it has no systemd and the tests read files
+# copies_in <directory>: how many copies of the data are kept there
+copies_in() {
+    find "$1" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l
+}
+
 forbid_service_start() {
     cat > /usr/sbin/policy-rc.d <<'EOF'
 #!/bin/sh
@@ -166,6 +171,33 @@ test_contents() {
     check "no repository data"   "0"   "$(grep -c '/\.git/' <<<"${contents}")"
     info  "upstream .github and .gitattributes inside dependencies" \
           "$(grep -c '/\.git[a-z]' <<<"${contents}") files"
+}
+
+# TEMPORARY, goes away with package/backup-z2m-data.sh.
+# Checks:
+#   - an install over an existing installation leaves one more copy, with the configuration in it
+#   - the next install leaves one more again: earlier copies are not rotated away
+# Does not check:
+#   - a first install: there is no data to copy then
+test_data_copied_to_var_backups() {
+    backups=/var/backups/zigbee2mqtt
+    before=$(copies_in "${backups}")
+    forbid_service_start
+    mkdir -p "${APP}/data"
+    echo "wb-backup-marker" >> "${APP}/data/configuration.yaml"
+
+    apt-get install -y --reinstall "${DEB}" > /tmp/backup-install.log 2>&1 ||
+        apt_errors /tmp/backup-install.log
+    check "an install leaves one more copy" "$((before + 1))" "$(copies_in "${backups}")"
+    check "the configuration is in it"      "yes" \
+          "$(yes_no grep -rq 'wb-backup-marker' "${backups}")"
+
+    apt-get install -y --reinstall "${DEB}" > /tmp/backup-install.log 2>&1 ||
+        apt_errors /tmp/backup-install.log
+    check "the next install adds one more"  "$((before + 2))" "$(copies_in "${backups}")"
+
+    sed -i '/wb-backup-marker/d' "${APP}/data/configuration.yaml"
+    allow_service_start
 }
 
 # The result of the cleanup step, checked in the package itself.
@@ -418,6 +450,7 @@ SUITE_DEB="test_control_fields
 
 SUITE_INSTALLED="test_installed_version
                  test_files_intact
+                 test_data_copied_to_var_backups
                  test_version_matches_sources
                  test_size_within_bounds
                  test_service_unit_installed

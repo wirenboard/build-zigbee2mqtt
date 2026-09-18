@@ -151,6 +151,15 @@ build_application() {
 # produced the replace-or-keep prompt whenever the default changed, and an answered "replace"
 # destroyed the Zigbee network. The package ships a template instead, and setup-z2m-config.sh
 # creates the file on the controller when there is none.
+# TEMPORARY, goes away with package/backup-z2m-data.sh. dpkg calls one of the two preinst
+# functions fpm generates, so the copy has to be in both
+before_upgrade_with_backup() {
+    local combined
+    combined=$(mktemp)
+    cat package/backup-z2m-data.sh package/before-upgrade.sh > "${combined}"
+    echo "${combined}"
+}
+
 pack_deb_with_fpm() {
     local dependency=$1
 
@@ -177,7 +186,8 @@ pack_deb_with_fpm() {
         --vendor 'Wiren Board' \
         --depends "${dependency}" \
         --after-install package/after-install.sh \
-        --before-upgrade package/before-upgrade.sh \
+        --before-install package/backup-z2m-data.sh \
+        --before-upgrade "$(before_upgrade_with_backup)" \
         --after-upgrade package/after-upgrade.sh \
         --package "${RESULT_DIR}/result.deb" \
         "${FPM_EXTRA[@]}" \

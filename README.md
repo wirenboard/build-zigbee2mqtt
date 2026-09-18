@@ -36,6 +36,25 @@ Kept for now, with a reason to think first:
 
 Licence texts stay everywhere: they have to travel with the code.
 
+Copy of the data before an install
+----------------------------------
+
+**This is temporary.** `package/backup-z2m-data.sh` copies `/mnt/data/root/zigbee2mqtt/data` into
+`/var/backups/zigbee2mqtt/<date>T<time>` before every install and every upgrade, and never removes
+an earlier copy.
+
+The reason is a real case: an upgrade stopped half way, the tree of the application was left
+without `data`, and the configuration went with it, network key and paired devices included. Until
+such a run is impossible, every install leaves a copy behind, and a week later the answer to "my
+configuration is gone" is a path.
+
+`/var/backups` was picked because it is where Debian itself keeps copies of `dpkg`, `apt` and
+`alternatives` state, it survives `apt purge` of this package, nothing rotates it by a timer, and
+it does not depend on where the application keeps its data.
+
+To remove this logic: delete `package/backup-z2m-data.sh`, the two fpm flags in
+`scripts/build.sh` that inline it, and `test_data_copied_to_var_backups` in `scripts/test-deb.sh`.
+
 The configuration on the controller
 -----------------------------------
 
