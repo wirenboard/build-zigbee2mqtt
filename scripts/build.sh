@@ -142,6 +142,9 @@ pack_deb_with_fpm() {
 
     mkdir -p "${RESULT_DIR}"
 
+    # TODO: --deb-after-purge package/after-purge.sh, to wipe /mnt/data/root/zigbee2mqtt when the
+    # package is purged. fpm 1.18.0 takes the flag and does nothing with it: the option handler
+    # puts the path into attributes[:deb_after_purge], and nothing in fpm ever reads that attribute
     fpm --input-type dir \
         --output-type deb \
         --name "${PKG_NAME}" \

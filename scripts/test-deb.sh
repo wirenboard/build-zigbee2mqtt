@@ -52,8 +52,10 @@ section() { echo; echo "=== $* ==="; }
 ### tools
 
 yes_no()       { if "$@"; then echo yes; else echo no; fi; }
-# The version of a package the repositories of this rootfs offer, empty when they have none
-version_in_repositories() { apt-cache policy "$1" | awk '/Candidate:/ { print $2 }' | grep -v '(none)'; }
+# The newest version of a package the repositories of this rootfs offer, empty when they have
+# none. Not apt-cache policy: its Candidate is the installed version when nothing in the
+# repositories is newer, and this one has to name a version that came from a repository
+version_in_repositories() { apt-cache madison "$1" 2>/dev/null | awk -F'|' 'NR == 1 { gsub(/ /, "", $2); print $2 }'; }
 deb_field()    { dpkg-deb --field "${DEB}" "$1"; }
 deb_contents() { dpkg-deb --contents "${DEB}"; }
 # Runs node in the installed application, the way the service does
@@ -286,6 +288,10 @@ test_upgrade_keeps_config() {
     version_to_upgrade_from=$(version_in_repositories zigbee2mqtt)
     if [ -z "${version_to_upgrade_from}" ]; then
         skip "${CURRENT}: no zigbee2mqtt in the repositories of this rootfs"
+        return 0
+    fi
+    if [ "${version_to_upgrade_from}" = "${version_built_here}" ]; then
+        skip "${CURRENT}: the repositories offer the very version built here, nothing to upgrade from"
         return 0
     fi
     info "the version to upgrade from" "${version_to_upgrade_from}"

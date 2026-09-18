@@ -66,9 +66,12 @@ List poolVersions(String poolPrefix, String pkg, String arch) {
         "&prefix=${poolPrefix}/pool/main/${pkg[0]}/${pkg}/'" +
         " | grep -oE '<Key>[^<]+' | sed 's|.*/||' | sort -V").trim()
 
+    // The bucket holds a twin of every ~exp~ upload, with the pluses of the version turned
+    // into spaces: same size, same content, another key. One of the two is enough here
     return listing.split('\n')
-        .findAll { it.startsWith("${pkg}_") && it.endsWith(suffix) }
+        .findAll { it.startsWith("${pkg}_") && it.endsWith(suffix) && !it.contains(' ') }
         .collect { it[(pkg.length() + 1)..-(suffix.length() + 1)] }
+        .unique()
 }
 
 Map targetRepo() {
