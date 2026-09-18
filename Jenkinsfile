@@ -36,7 +36,7 @@ String exitMeaning(String script, int code) {
             return entry.substring(space + 1)
         }
     }
-    return 'the header of the script does not list this code'
+    return 'not a code of the script: under set -e the code of the command that failed goes out as it is'
 }
 
 // Runs one of scripts/ where this target is built, with the variables that script reads.
@@ -151,8 +151,8 @@ pipeline {
         PROJECT_SUBDIR = 'zigbee2mqtt'
         RESULT_SUBDIR = 'result'
 
-        // The place the build runs, shared by Build and Test deb: the package is checked on the
-        // very Node.js it was built with
+        // The place the build runs. Test deb uses the same method, so the package is checked on a
+        // rootfs of the same kind, with the Node.js of the same version installed anew by apt
         WBDEV_BUILD_METHOD = "qemuchroot"
         WBDEV_USE_UNSTABLE_DEPS = "${unstableDeps()}"
         // Initialize params as envvars, workaround for bug https://issues.jenkins-ci.org/browse/JENKINS-41929

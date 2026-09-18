@@ -1,7 +1,7 @@
 #!/bin/sh
 # Runs on the controller after an upgrade has unpacked the new package.
 # fpm inlines this file into the body of a function of the generated maintainer script, so the
-# shebang and any `set` here would have no effect, and a failing command does not stop the upgrade.
+# shebang and any "set" here would have no effect, and a failing command does not stop the upgrade.
 # That is why every step below reports for itself.
 
 CONFIG_FILE=/mnt/data/root/zigbee2mqtt/data/configuration.yaml

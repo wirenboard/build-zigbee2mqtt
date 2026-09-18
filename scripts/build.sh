@@ -5,8 +5,10 @@
 # Env:   BUILD_AND_REQUIRE_NODEJS, the Node.js major to build with and to require, no default
 #        NPM_REGISTRY, registry override, empty for the default one
 # Exit:  0 package built, 1 a build step failed (the log names it), 2 usage
+#        any other code comes from the command that failed under set -e, for example 100
+#        from apt-get
 #
-# Runs inside `wbdev chroot`. Every command is echoed: the build log is the only record of what
+# Runs inside "wbdev chroot". Every command is echoed: the build log is the only record of what
 # happened in that rootfs.
 #
 # Version examples, as the Jenkinsfile passes them:
@@ -44,7 +46,7 @@ format_apt_dependency() {
     case "$1" in
         # zigbee2mqtt 1.18.1 needs Node 16, which ships as the separate package nodejs-16
         16) echo "nodejs-16" ;;
-        # unix-dgram, the only native module built from source here, is compiled for the ABI of
+        # "unix-dgram", the only native module built from source here, is compiled for the ABI of
         # the Node.js it was built with and does not load on another major, hence the upper bound
         *)  echo "nodejs (>= $1), nodejs (<< $(($1 + 1)))" ;;
     esac
@@ -53,25 +55,30 @@ format_apt_dependency() {
 # Installs the Node.js the package will require, or reports what the rootfs offers instead
 install_nodejs() {
     local dependency=$1
+    # The package to look at: "nodejs (>= 24), nodejs (<< 25)" is about nodejs, major 16 is about
+    # the separate package nodejs-16
+    local package=${dependency%% *}
 
     echo "Node.js available in the rootfs before the install:"
-    apt-cache policy nodejs
+    apt-cache policy "${package}"
 
     if ! apt-get satisfy -y "${dependency}"; then
         echo >&2 "=== '${dependency}' cannot be satisfied in this rootfs ==="
-        apt-cache policy nodejs >&2
-        echo >&2 "A version the repositories do not have yet can come from a testing set:"
-        echo >&2 "  set WBDEV_TESTING_SETS=<name>, or pick another major from the list above"
+        apt-cache policy "${package}" >&2
+        echo >&2 "Pick another major from the list above, or take the version from a testing set:"
+        echo >&2 "  set WBDEV_TESTING_SETS=<name>. That parameter is for the controller targets:"
+        echo >&2 "  wbdev writes the set into the rootfs, and an amd64 build runs in the devenv"
+        echo >&2 "  container instead, so its Node.js has to be in dev-tools itself"
         return 1
     fi
 
     echo "Node.js in the rootfs for this build: installed version and the repository it came from"
-    apt-cache policy nodejs
+    apt-cache policy "${package}"
 }
 
 install_toolchain() {
     apt-get install -y git make g++ gcc ruby ruby-dev rubygems build-essential
-    gem install --no-document fpm -v 1.16.0
+    gem install --no-document fpm -v 1.18.0
 }
 
 enable_pnpm() {
@@ -87,42 +94,45 @@ enable_pnpm() {
     fi
 }
 
-# Include nodejs version 16 to supported engines
-# https://github.com/Koenkk/zigbee2mqtt/pull/7297
+# That old release names Node 15 as the newest it supports, and the package needs it to run on
+# nodejs-16: https://github.com/Koenkk/zigbee2mqtt/pull/7297
 allow_node_16_in_engines() {
     [ "${PKG_NAME}" = "zigbee2mqtt-1.18.1" ] || return 0
     sed -i 's#|| ^15#|| ^15 || ^16#' "${SOURCES}/package.json"
 }
 
-# One attempt: install everything, compile TypeScript, then drop what only the build needed
-build_application_once() {
-    pnpm install --frozen-lockfile || { echo "pnpm install failed."; return 1; }
-
-    # 1.18.1 ships plain JavaScript and has nothing to compile
-    [ "${PKG_NAME}" != "zigbee2mqtt-1.18.1" ] || return 0
-
-    pnpm run build || { echo "pnpm run build failed."; return 1; }
-    pnpm prune --prod || { echo "pnpm prune failed."; return 1; }
-}
-
-# The registry and the network fail often enough that one attempt is not a verdict
-build_application() {
+# The registry and the network fail often enough that one attempt at the dependencies is not a
+# verdict. Compiling is another matter: the same sources fail the same way, so it runs once
+install_dependencies() {
     local attempt
-    pushd "${SOURCES}" || exit 1
     for attempt in 1 2 3 4 5; do
-        if build_application_once; then
-            echo "Build done from ${attempt} tries!"
-            popd || exit 1
+        if pnpm install --frozen-lockfile; then
+            echo "Dependencies installed from ${attempt} tries"
             return 0
         fi
-        echo "Build FAILED, retry (${attempt} done)"
+        echo "pnpm install failed, retry (${attempt} done)"
     done
-    echo "Build FAILED!"
-    exit 1
+    echo "pnpm install failed five times"
+    return 1
+}
+
+build_application() {
+    pushd "${SOURCES}" || exit 1
+    install_dependencies || exit 1
+
+    # zigbee2mqtt-1.18.1 is an old release kept as a package of its own, for installations that
+    # stayed on it. It is plain JavaScript: TypeScript came to zigbee2mqtt later, so nothing here
+    # has to be compiled
+    if [ "${PKG_NAME}" != "zigbee2mqtt-1.18.1" ]; then
+        pnpm run build || { echo "pnpm run build failed"; exit 1; }
+        pnpm prune --prod || { echo "pnpm prune failed"; exit 1; }
+    fi
+
+    popd || exit 1
 }
 
 # The runtime configuration is deliberately not packaged. zigbee2mqtt rewrites
-# data/configuration.yaml itself and keeps the network key, the pan id and the paired devices
+# "data/configuration.yaml" itself and keeps the network key, the pan id and the paired devices
 # there, so it is state rather than a setting from the maintainer: as a dpkg conffile it
 # produced the replace-or-keep prompt whenever the default changed, and an answered "replace"
 # destroyed the Zigbee network. The package ships a template instead, and setup-z2m-config.sh
