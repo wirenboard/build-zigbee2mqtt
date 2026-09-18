@@ -378,6 +378,14 @@ pipeline {
             post {
                 always {
                     sh 'wbdev root chown -R jenkins:jenkins .'
+                    // The counts land on the job page, so the result of the checks is visible
+                    // without opening the log of the stage
+                    script {
+                        String summary = "${RESULT_SUBDIR}/test-summary.txt"
+                        if (fileExists(summary)) {
+                            currentBuild.description += " | tests: ${readFile(summary).trim()}"
+                        }
+                    }
                 }
             }
         }

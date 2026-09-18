@@ -43,11 +43,21 @@ check() {   # check <what> <expected> <actual>
         PASSED=$((PASSED + 1)); echo "ok    $1: $3"
     else
         FAILED=$((FAILED + 1)); echo "FAIL  $1: got '$3', expected '$2'"
+        # The names are repeated at the end: in Jenkins the tail of the log is what one sees first
+        FAILED_NAMES="${FAILED_NAMES}${FAILED_NAMES:+, }$1"
     fi
 }
 skip()    { SKIPPED=$((SKIPPED + 1)); echo "skip  $1"; }
 info()    { echo "info  $1: $2"; }
 section() { echo; echo "=== $* ==="; }
+
+# run_section <title> <suite>: the tests of one suite, with the time they took
+run_section() {
+    section "$1"
+    started=$(date +%s)
+    for CURRENT in $2; do "${CURRENT}"; done
+    echo "      ${1} took $(( $(date +%s) - started ))s"
+}
 
 ### tools
 
@@ -96,6 +106,13 @@ expected_dependency() {
 
 # The package that dependency is about: nodejs, or nodejs-16 for that old release
 expected_package() { expected_dependency | sed 's/ .*//'; }
+
+# apt_errors <log>: the lines that say what went wrong, or the tail when there are none
+apt_errors() {
+    if ! grep -E '^(E:|dpkg: )' "$1" | head -10 | sed 's/^/        /' | grep -q .; then
+        tail -10 "$1" | sed 's/^/        /'
+    fi
+}
 
 need_command() {
     command -v "$1" > /dev/null && return 0
@@ -295,7 +312,7 @@ test_upgrade_keeps_config() {
     # What this rootfs has and where from: with a testing set connected there is an experimental.*
     # line here too, and the log has to show which of them the version below came from
     echo "      zigbee2mqtt in the repositories of this rootfs:"
-    apt-cache policy zigbee2mqtt | sed 's/^/        /'
+    apt-cache policy zigbee2mqtt 2>/dev/null | sed 's/^/        /'
 
     version_to_upgrade_from=$(released_version_of zigbee2mqtt)
     if [ -z "${version_to_upgrade_from}" ] || [ "${version_to_upgrade_from}" = "${version_built_here}" ]; then
@@ -311,7 +328,7 @@ test_upgrade_keeps_config() {
     rm -f "${config_path}"
 
     if ! apt-get install -y "zigbee2mqtt=${version_to_upgrade_from}" > /tmp/from-repo.log 2>&1; then
-        tail -5 /tmp/from-repo.log | sed 's/^/        /'
+        apt_errors /tmp/from-repo.log
         check "the released version installs" "yes" "no"
         allow_service_start
         return 0
@@ -320,15 +337,19 @@ test_upgrade_keeps_config() {
           "$(dpkg-query -W -f='${Version}' zigbee2mqtt)"
 
     printf '\n# wb-upgrade-marker\n' >> "${config_path}"
-    config_md5_before_upgrade=$(md5sum "${config_path}" | cut -d' ' -f1)
+    cp "${config_path}" "${config_path}.before-upgrade"
 
-    apt-get install -y "${DEB}" > /tmp/upgrade.log 2>&1 ||
-        tail -5 /tmp/upgrade.log | sed 's/^/        /'
+    apt-get install -y "${DEB}" > /tmp/upgrade.log 2>&1 || apt_errors /tmp/upgrade.log
     check "installed after the upgrade" "${version_built_here}" \
           "$(dpkg-query -W -f='${Version}' zigbee2mqtt)"
-    check "md5 of the marked configuration" "${config_md5_before_upgrade}" \
-          "$(md5sum "${config_path}" | cut -d' ' -f1)"
+    check "the marker survives the upgrade" "yes" \
+          "$(yes_no grep -q 'wb-upgrade-marker' "${config_path}")"
+    check "the configuration is the same file" "yes" \
+          "$(yes_no cmp -s "${config_path}.before-upgrade" "${config_path}")"
+    cmp -s "${config_path}.before-upgrade" "${config_path}" ||
+        diff -u "${config_path}.before-upgrade" "${config_path}" | head -20 | sed 's/^/        /'
 
+    rm -f "${config_path}.before-upgrade"
     sed -i '/wb-upgrade-marker/d' "${config_path}"
     allow_service_start
 }
@@ -358,10 +379,6 @@ SUITE_UPGRADE="test_upgrade_keeps_config"
 
 ALL_SUITES="${SUITE_DEB} ${SUITE_INSTALLED} ${SUITE_APPLICATION} ${SUITE_MODULES} ${SUITE_UPGRADE}"
 
-run_suite() {
-    for CURRENT in $1; do "${CURRENT}"; done
-}
-
 # A test in no suite would never run and nothing in the counts would show it
 verify_suites() {
     listed=$(printf '%s\n' ${ALL_SUITES} | sort)
@@ -375,7 +392,7 @@ verify_suites() {
 ### main
 
 main() {
-    PASSED=0 FAILED=0 SKIPPED=0 CURRENT=''
+    PASSED=0 FAILED=0 SKIPPED=0 CURRENT='' FAILED_NAMES=''
     parse_arguments "$@"
     verify_suites
     echo "checking $(basename "${DEB}") against Node.js ${BUILD_AND_REQUIRE_NODEJS}"
@@ -388,16 +405,20 @@ main() {
     echo "Node.js available for the install:"
     apt-cache policy "$(expected_package)"
 
-    section "the .deb file";                   run_suite "${SUITE_DEB}"
-    section "install";                         install_package
-    section "the installed package";           run_suite "${SUITE_INSTALLED}"
-    section "native modules on this Node.js";  run_suite "${SUITE_MODULES}"
-    section "the application";                 run_suite "${SUITE_APPLICATION}"
+    run_section "the .deb file"                  "${SUITE_DEB}"
+    section     "install";                       install_package
+    run_section "the installed package"          "${SUITE_INSTALLED}"
+    run_section "native modules on this Node.js" "${SUITE_MODULES}"
+    run_section "the application"                "${SUITE_APPLICATION}"
     # Last: it replaces the installed package twice, and the tests above expect the one built here
-    section "upgrade from the repositories";   run_suite "${SUITE_UPGRADE}"
+    run_section "upgrade from the repositories"  "${SUITE_UPGRADE}"
 
     echo
-    echo "=== ${PASSED} passed, ${FAILED} failed, ${SKIPPED} skipped ==="
+    [ -z "${FAILED_NAMES}" ] || echo "=== failed: ${FAILED_NAMES} ==="
+    summary="${PASSED} passed, ${FAILED} failed, ${SKIPPED} skipped"
+    echo "=== ${summary} ==="
+    # The Jenkinsfile puts this line into the description of the build
+    echo "${summary}" > "${RESULT_DIR}/test-summary.txt" 2>/dev/null || true
     [ "${FAILED}" -eq 0 ]
 }
 
