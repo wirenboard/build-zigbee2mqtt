@@ -53,17 +53,38 @@ void runScript(String script, String variables, String args) {
 // for development machines and goes to dev-tools. Each repository has its own testing sets, named
 // by its own config: a set published with the release config serves armhf and arm64, a set that
 // has to serve amd64 lives in dev-tools. wb.repos gives the upload job and the aptly config
+// The pool lives in a public bucket, so a build can look into it before it spends an hour
+// compiling. wbci-repo does not fail on a version it already has: it logs "already exists in
+// pool", skips the file and leaves the stage green, so a repeat upload changes nothing there
+String POOL_BUCKET = 'https://s3-eu-west-1.amazonaws.com/deb.wirenboard.com'
+
+// Versions of this package for this architecture that are in the pool now, oldest first. The
+// order is sort -V, good enough to name the newest in a log line
+List poolVersions(String poolPrefix, String pkg, String arch) {
+    String suffix = "_${arch}.deb"
+    String listing = sh(returnStdout: true, script:
+        "curl -sS --max-time 60 '${POOL_BUCKET}?list-type=2" +
+        "&prefix=${poolPrefix}/pool/main/${pkg[0]}/${pkg}/'" +
+        " | grep -oE '<Key>[^<]+' | sed 's|.*/||' | sort -V").trim()
+
+    return listing.split('\n')
+        .findAll { it.startsWith("${pkg}_") && it.endsWith(suffix) }
+        .collect { it[(pkg.length() + 1)..-(suffix.length() + 1)] }
+}
+
 Map targetRepo() {
     if (params.WBDEV_TARGET.endsWith('-amd64')) {
         return [name:              'dev-tools',
                 uploadJob:         wb.repos.devTools.uploadJob,
                 aptlyConfig:       wb.repos.devTools.aptlyConfig,
-                testingSetsConfig: 'testing-sets-devtools-aptly-config']
+                testingSetsConfig: 'testing-sets-devtools-aptly-config',
+                poolPrefix:        'dev-tools']
     }
     return [name:              'release',
             uploadJob:         wb.repos.release.uploadJob,
             aptlyConfig:       wb.repos.release.aptlyConfig,
-            testingSetsConfig: 'testing-sets-release-aptly-config']
+            testingSetsConfig: 'testing-sets-release-aptly-config',
+            poolPrefix:        'all']
 }
 
 // The devenv image of the target release, unless the parameter names another one
@@ -278,16 +299,51 @@ pipeline {
                     suffix = env.WB_VERSION_SUFFIX
                 }
                 env.VERSION = env.PURE_VERSION + params.WB_REVISION + suffix
+                env.PKG_NAME = 'zigbee2mqtt'
+                if (params.VERSION_TO_NAME) {
+                    env.PKG_NAME = "zigbee2mqtt-${env.PURE_VERSION}"
+                }
                 echo "Pure version: $PURE_VERSION"
                 echo "Version with suffix: $VERSION"
             }}}
         }
+        // What the pool has now, and what this build would do to it. Before the long part, because
+        // an upload that silently changes nothing is worth knowing about before the build, not after
+        stage('Check the version in the pool') {
+            steps { script {
+                Map repo = targetRepo()
+                String arch = params.WBDEV_TARGET.tokenize('-').last()
+                List versions = poolVersions(repo.poolPrefix, env.PKG_NAME, arch)
+
+                if (versions.isEmpty()) {
+                    echo "Pool of ${repo.name}: no ${env.PKG_NAME} for ${arch} there yet"
+                } else {
+                    echo "Pool of ${repo.name}: ${versions.size()} ${env.PKG_NAME} ${arch} package(s), " +
+                         "newest ${versions.last()}"
+                }
+
+                boolean inPool = versions.contains(env.VERSION)
+                if (!inPool && params.UPLOAD_TO_POOL) {
+                    echo "${env.VERSION} is not there: this build adds it"
+                } else if (!inPool) {
+                    echo "${env.VERSION} is not there, and this build does not upload"
+                } else if (!params.UPLOAD_TO_POOL) {
+                    echo "${env.VERSION} is already there; this build does not upload, so it stays as it is"
+                } else if (params.FORCE_OVERWRITE) {
+                    echo "${env.VERSION} is already there and FORCE_OVERWRITE is on: " +
+                         "this build replaces the package in the pool"
+                } else {
+                    error("${env.VERSION} is already in the pool of ${repo.name}. wbci-repo keeps the " +
+                          "package it already has and skips the new one, so this build would upload " +
+                          "nothing: bump WB_REVISION, or set FORCE_OVERWRITE to replace it.")
+                }
+            }}
+        }
         stage('Build') {
             steps { script {
-                def name = "zigbee2mqtt"
+                def name = env.PKG_NAME
                 def specialParams = ""
                 if (params.VERSION_TO_NAME) {
-                    name = "zigbee2mqtt-${PURE_VERSION}"
                     specialParams = "--provides zigbee2mqtt --conflicts zigbee2mqtt --replaces zigbee2mqtt"
                 }
 
