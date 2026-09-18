@@ -196,14 +196,39 @@ test_installed_version() {
     check "installed version" "$(deb_field Version)" "$(dpkg-query -W -f='${Version}' zigbee2mqtt 2>/dev/null)"
 }
 
+# The globs this dpkg is told never to unpack, one per line
+dpkg_excluded_globs() {
+    cat /etc/dpkg/dpkg.cfg /etc/dpkg/dpkg.cfg.d/* 2>/dev/null |
+        sed -n 's/^[[:space:]]*path-exclude[[:space:]]*=\{0,1\}[[:space:]]*//p'
+}
+
+# verify_lines_about_kept_files <package>: the lines of "dpkg -V" about files this rootfs was
+# allowed to unpack
+verify_lines_about_kept_files() {
+    excluded=$(dpkg_excluded_globs)
+    # The globs are here to be matched, not to be expanded against this filesystem
+    set -f
+    dpkg -V "$1" 2>&1 | while read -r line; do
+        path=${line##* }
+        for glob in ${excluded}; do
+            case "${path}" in ${glob}) continue 2 ;; esac
+        done
+        echo "${line}"
+    done
+    set +f
+}
+
 # Asks dpkg whether the files on disk are the ones from the package: fpm writes md5sums for that.
 # Checks:
 #   - every line "dpkg -V" prints, because a missing file still leaves its exit code at zero
 # Does not check:
-#   - /usr/share/doc, which this rootfs drops while unpacking, so dpkg lists it as missing
+#   - manuals and documentation in a build rootfs: dpkg there is told not to unpack them
+#     ("path-exclude"), and then calls them missing
 #   - "data/configuration.yaml", which the package no longer ships: it belongs to the controller
 test_files_intact() {
-    listed=$(dpkg -V zigbee2mqtt 2>&1 | grep -v '/usr/share/doc/')
+    excluded=$(dpkg_excluded_globs | tr '\n' ' ')
+    [ -z "${excluded}" ] || info "paths this rootfs does not unpack" "${excluded}"
+    listed=$(verify_lines_about_kept_files zigbee2mqtt)
     [ -z "${listed}" ] || sed 's/^/        /' <<<"${listed}"
     check "files dpkg finds changed or missing" "0" "$(grep -c '[^[:space:]]' <<<"${listed}")"
 }
