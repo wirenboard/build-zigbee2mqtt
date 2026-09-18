@@ -196,24 +196,33 @@ test_installed_version() {
     check "installed version" "$(deb_field Version)" "$(dpkg-query -W -f='${Version}' zigbee2mqtt 2>/dev/null)"
 }
 
-# The globs this dpkg is told never to unpack, one per line
-dpkg_excluded_globs() {
+# dpkg_path_globs exclude|include: the globs of the dpkg configuration, one per line. A rootfs
+# tells dpkg what to leave out of every package ("exclude") and what to keep anyway ("include")
+dpkg_path_globs() {
     cat /etc/dpkg/dpkg.cfg /etc/dpkg/dpkg.cfg.d/* 2>/dev/null |
-        sed -n 's/^[[:space:]]*path-exclude[[:space:]]*=\{0,1\}[[:space:]]*//p'
+        sed -n "s/^[[:space:]]*path-$1[[:space:]]*=\{0,1\}[[:space:]]*//p"
+}
+
+# path_matches <path> <globs>: true when the path fits one of the globs
+path_matches() {
+    for glob in $2; do
+        case "$1" in ${glob}) return 0 ;; esac
+    done
+    return 1
 }
 
 # verify_lines_about_kept_files <package>: the lines of "dpkg -V" about files this rootfs was
 # allowed to unpack
 verify_lines_about_kept_files() {
-    excluded=$(dpkg_excluded_globs)
+    excluded=$(dpkg_path_globs exclude)
+    included=$(dpkg_path_globs include)
     # The globs are here to be matched, not to be expanded against this filesystem
     set -f
     dpkg -V "$1" 2>&1 | while read -r line; do
         path=${line##* }
-        for glob in ${excluded}; do
-            case "${path}" in ${glob}) continue 2 ;; esac
-        done
-        echo "${line}"
+        if path_matches "${path}" "${included}" || ! path_matches "${path}" "${excluded}"; then
+            echo "${line}"
+        fi
     done
     set +f
 }
@@ -222,12 +231,15 @@ verify_lines_about_kept_files() {
 # Checks:
 #   - every line "dpkg -V" prints, because a missing file still leaves its exit code at zero
 # Does not check:
-#   - manuals and documentation in a build rootfs: dpkg there is told not to unpack them
-#     ("path-exclude"), and then calls them missing
+#   - manuals, documentation and most translations: the rootfs of a controller and the rootfs of
+#     this build both tell dpkg to leave them out of every package ("path-exclude"), and dpkg then
+#     calls them missing. What such a rule lets through ("path-include") is checked
 #   - "data/configuration.yaml", which the package no longer ships: it belongs to the controller
 test_files_intact() {
-    excluded=$(dpkg_excluded_globs | tr '\n' ' ')
+    excluded=$(dpkg_path_globs exclude | tr '\n' ' ')
+    included=$(dpkg_path_globs include | tr '\n' ' ')
     [ -z "${excluded}" ] || info "paths this rootfs does not unpack" "${excluded}"
+    [ -z "${included}" ] || info "paths it keeps anyway"           "${included}"
     listed=$(verify_lines_about_kept_files zigbee2mqtt)
     [ -z "${listed}" ] || sed 's/^/        /' <<<"${listed}"
     check "files dpkg finds changed or missing" "0" "$(grep -c '[^[:space:]]' <<<"${listed}")"
