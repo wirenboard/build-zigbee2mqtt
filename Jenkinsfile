@@ -317,8 +317,10 @@ pipeline {
                 if (versions.isEmpty()) {
                     echo "Pool of ${repo.name}: no ${env.PKG_NAME} for ${arch} there yet"
                 } else {
-                    echo "Pool of ${repo.name}: ${versions.size()} ${env.PKG_NAME} ${arch} package(s), " +
-                         "newest ${versions.last()}"
+                    // The whole list, so the log keeps what the pool held at the time of this build
+                    echo "Pool of ${repo.name}, ${versions.size()} ${env.PKG_NAME} ${arch} package(s):\n  " +
+                         versions.join('\n  ')
+                    echo "Newest in the pool: ${versions.last()}"
                 }
 
                 boolean inPool = versions.contains(env.VERSION)
