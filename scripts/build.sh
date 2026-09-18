@@ -1,7 +1,11 @@
 #!/bin/bash
 # Builds the zigbee2mqtt package: installs the Node.js the package will require and the toolchain,
 # builds the application with pnpm and packs the result with fpm.
-# Usage: build.sh <package name> <version> <sources dir> <result dir> [extra fpm flags]
+# Usage: build.sh [--step build|pack] <package name> <version> <sources dir> <result dir> [extra fpm flags]
+#        --step build  install Node.js and the toolchain, build the application, and stop
+#        --step pack   install fpm and pack a tree built earlier
+#        no --step     both, as one run, the way a build by hand does it
+# The two steps exist so that the job can clean the built tree between them: scripts/prune-files.sh
 # Env:   BUILD_AND_REQUIRE_NODEJS, the Node.js major to build with and to require, no default
 #        NPM_REGISTRY, registry override, empty for the default one
 # Exit:  0 package built, 1 a build step failed (the log names it), 2 usage
@@ -19,9 +23,15 @@
 set -euo pipefail
 set -x
 
-usage() { sed -n '2,7p' "$0" >&2; exit 2; }
+usage() { sed -n '2,11p' "$0" >&2; exit 2; }
 
 parse_arguments() {
+    STEP=all
+    if [ "${1:-}" = "--step" ]; then
+        STEP=${2:-}
+        case "${STEP}" in build|pack) ;; *) usage ;; esac
+        shift 2
+    fi
     [ $# -ge 4 ] || usage
     PKG_NAME=$1
     VERSION=$2
@@ -76,8 +86,12 @@ install_nodejs() {
     apt-cache policy "${package}"
 }
 
-install_toolchain() {
-    apt-get install -y git make g++ gcc ruby ruby-dev rubygems build-essential
+install_build_tools() {
+    apt-get install -y git make g++ gcc build-essential
+}
+
+install_fpm() {
+    apt-get install -y ruby ruby-dev rubygems
     gem install --no-document fpm -v 1.18.0
 }
 
@@ -174,8 +188,8 @@ pack_deb_with_fpm() {
     dpkg-name "${RESULT_DIR}/result.deb"
 }
 
-main() {
-    parse_arguments "$@"
+build_step() {
+    local dependency=$1
 
     echo "Current APT configuration in wirenboard.list:"
     cat /etc/apt/sources.list.d/wirenboard.list || echo "File doesn't exist"
@@ -183,15 +197,41 @@ main() {
 
     # Node.js first: if the required version is missing, the build fails in seconds instead of
     # after the minutes the toolchain below costs under emulation
-    local dependency
-    dependency=$(format_apt_dependency "${BUILD_AND_REQUIRE_NODEJS}")
     install_nodejs "${dependency}"
-    install_toolchain
+    install_build_tools
     enable_pnpm
 
     allow_node_16_in_engines
     build_application
+}
+
+pack_step() {
+    local dependency=$1
+
+    # node_modules, not dist: zigbee2mqtt-1.18.1 is plain JavaScript and builds no dist
+    [ -d "${SOURCES}/node_modules" ] || {
+        echo >&2 "${SOURCES} is not built: run build.sh --step build first"
+        exit 1
+    }
+    # The job removes what a controller cannot use in a step of its own, between the two halves
+    bash "$(dirname "$0")/prune-files.sh" --check "${SOURCES}"
+
+    apt-get update
+    install_fpm
     pack_deb_with_fpm "${dependency}"
+}
+
+main() {
+    parse_arguments "$@"
+
+    local dependency
+    dependency=$(format_apt_dependency "${BUILD_AND_REQUIRE_NODEJS}")
+
+    case "${STEP}" in
+        build) build_step "${dependency}" ;;
+        pack)  pack_step  "${dependency}" ;;
+        all)   build_step "${dependency}"; pack_step "${dependency}" ;;
+    esac
 }
 
 main "$@"

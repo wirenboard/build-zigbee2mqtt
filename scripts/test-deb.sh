@@ -168,6 +168,23 @@ test_contents() {
           "$(grep -c '/\.git[a-z]' <<<"${contents}") files"
 }
 
+# scripts/prune-files.sh removes what nobody can use on a controller, in a step of its own, and
+# build.sh checks that it happened before it packs. Here the result is checked in the package.
+# Checks:
+#   - no test suite, no state of an incremental TypeScript compile
+# Does not check:
+#   - source maps, type definitions and markdown texts: they stay for now, and how many of them
+#     the package carries is printed below
+test_developer_files_not_packaged() {
+    contents=$(deb_contents)
+    check "no test suite"            "0" "$(grep -c "\.${APP}/test/" <<<"${contents}")"
+    check "no incremental build state" "0" \
+          "$(grep -c 'tsconfig\.tsbuildinfo$' <<<"${contents}")"
+    info  "source maps kept"         "$(grep -c '\.map$' <<<"${contents}") files"
+    info  "type definitions kept"    "$(grep -c '\.d\.ts$' <<<"${contents}") files"
+    info  "markdown kept"            "$(grep -c '\.md$' <<<"${contents}") files"
+}
+
 # The runtime configuration belongs to the controller, not to the package: as a conffile it made
 # dpkg ask whether to replace a file zigbee2mqtt rewrites itself, and "replace" wiped the network
 test_config_is_not_packaged() {
@@ -396,6 +413,7 @@ test_upgrade_keeps_config() {
 SUITE_DEB="test_control_fields
            test_depends_on_expected_node
            test_contents
+           test_developer_files_not_packaged
            test_config_is_not_packaged
            test_dependencies_resolvable"
 

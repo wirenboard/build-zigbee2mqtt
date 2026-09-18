@@ -39,6 +39,13 @@ String exitMeaning(String script, int code) {
     return 'not a code of the script: under set -e the code of the command that failed goes out as it is'
 }
 
+// The arguments of build.sh, the same for both of its steps
+String buildArguments() {
+    String special = params.VERSION_TO_NAME
+        ? "--provides zigbee2mqtt --conflicts zigbee2mqtt --replaces zigbee2mqtt" : ""
+    return "${env.PKG_NAME} ${env.VERSION} ${env.PROJECT_SUBDIR} ${env.RESULT_SUBDIR} ${special}"
+}
+
 // Runs one of scripts/ where this target is built, with the variables that script reads.
 // bash runs it, so a checkout without the executable bit still works
 void runScript(String script, String variables, String args) {
@@ -345,18 +352,40 @@ pipeline {
         }
         stage('Build') {
             steps { script {
-                def name = env.PKG_NAME
-                def specialParams = ""
-                if (params.VERSION_TO_NAME) {
-                    specialParams = "--provides zigbee2mqtt --conflicts zigbee2mqtt --replaces zigbee2mqtt"
-                }
-
                 sh "printenv | sort"
                 sh "wbdev root printenv | sort"
                 runScript('build.sh',
                           "BUILD_AND_REQUIRE_NODEJS='${params.BUILD_AND_REQUIRE_NODEJS}' " +
                           "NPM_REGISTRY='${params.NPM_REGISTRY}'",
-                          "${name} ${VERSION} ${PROJECT_SUBDIR} ${RESULT_SUBDIR} ${specialParams}")
+                          "--step build ${buildArguments()}")
+            }}
+            post {
+                always {
+                    sh 'wbdev root chown -R jenkins:jenkins .'
+                }
+            }
+        }
+
+        // For now only what nobody can use on a controller at all: the test suite, which has no
+        // vitest to run it there, and the state of an incremental TypeScript compile. The script
+        // names the candidates for later. build.sh asks it with --check before it packs
+        stage('Remove files a controller cannot use') {
+            steps {
+                runScript('prune-files.sh', "", "${PROJECT_SUBDIR}")
+            }
+            post {
+                always {
+                    sh 'wbdev root chown -R jenkins:jenkins .'
+                }
+            }
+        }
+
+        stage('Pack .deb') {
+            steps { script {
+                runScript('build.sh',
+                          "BUILD_AND_REQUIRE_NODEJS='${params.BUILD_AND_REQUIRE_NODEJS}' " +
+                          "NPM_REGISTRY='${params.NPM_REGISTRY}'",
+                          "--step pack ${buildArguments()}")
             }}
             post {
                 always {
