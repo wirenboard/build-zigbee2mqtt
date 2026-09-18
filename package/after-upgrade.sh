@@ -6,19 +6,17 @@
 
 CONFIG_FILE=/mnt/data/root/zigbee2mqtt/data/configuration.yaml
 
-# Restore user configuration saved before upgrade.
-# Done first so that the config is safe even if a later step (pnpm install) fails;
-# successful mv also removes .wb-old, preventing a stale backup from leaking
-# into the next upgrade.
-if [ -e "${CONFIG_FILE}.wb-old" ]; then
-    echo "Restoring configuration file after upgrade"
-    mv "${CONFIG_FILE}.wb-old" "${CONFIG_FILE}"
-fi
+# The configuration does not travel inside the package any more, so nothing had to be saved before
+# the upgrade and nothing is restored here. This creates the file when the controller has none and
+# fills in the serial port from the slot picked in the web interface.
+/usr/lib/zigbee2mqtt/setup-z2m-config.sh
 
 echo "Adding dependencies for pnpm"
 # Dependencies already included in .deb — this just prevents runtime issues
 pnpm install --prod --frozen-lockfile --force --prefix /mnt/data/root/zigbee2mqtt
 
+# Keys the package has started to rely on reach existing configurations only from here: the file
+# belongs to the user now, and a changed template does not travel to controllers by itself
 if ! grep -Pzq 'serial:\n(  .*\n)*  adapter: zstack' "${CONFIG_FILE}"; then
     LINE=$(awk '
         /^serial:/ { inside=1; next }

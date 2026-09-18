@@ -53,11 +53,11 @@ yes_no()       { if "$@"; then echo yes; else echo no; fi; }
 deb_field()    { dpkg-deb --field "${DEB}" "$1"; }
 deb_contents() { dpkg-deb --contents "${DEB}"; }
 # Runs node in the installed application, the way the service does
-in_app()       { ( cd "${APP}" && timeout 120 node -e "$1" 2>&1 ); }
+run_node_in_app()       { ( cd "${APP}" && timeout 120 node -e "$1" 2>&1 ); }
 
 # ok, or the reason the module did not load, out of a multi-line stack
 module_loads() {
-    output=$(in_app "$1")
+    output=$(run_node_in_app "$1")
     if [ "$(tail -1 <<<"${output}")" = ok ]; then
         echo ok
         return
@@ -127,6 +127,22 @@ test_contents() {
           "$(grep -c '/\.git[a-z]' <<<"${contents}") files"
 }
 
+# The runtime configuration belongs to the controller, not to the package: as a conffile it made
+# dpkg ask whether to replace a file zigbee2mqtt rewrites itself, and "replace" wiped the network
+test_config_is_not_packaged() {
+    contents=$(deb_contents)
+    check "no conffiles declared" "" \
+          "$(dpkg-deb -I "${DEB}" conffiles 2>/dev/null | tr -d '[:space:]')"
+    check "the runtime configuration is not in the package" "0" \
+          "$(grep -c '/zigbee2mqtt/data/configuration\.yaml$' <<<"${contents}")"
+    check "the template is"                 "yes" \
+          "$(yes_no grep -q '/usr/share/zigbee2mqtt/configuration\.default\.yaml$' <<<"${contents}")"
+    check "setup-z2m-config.sh is"              "yes" \
+          "$(yes_no grep -q '/usr/lib/zigbee2mqtt/setup-z2m-config\.sh$' <<<"${contents}")"
+    check "setup-z2m-config.sh is executable"   "yes" \
+          "$(yes_no grep -qE '^-rwx.*setup-z2m-config\.sh$' <<<"${contents}")"
+}
+
 test_dependencies_resolvable() {
     plan=$(apt-get install -s "${DEB}" 2>&1)
     grep -E '^(Inst|Remv) ' <<<"${plan}" | sed 's/^/      /'
@@ -165,6 +181,16 @@ test_size_within_bounds() {
 test_service_unit_installed() {
     check "systemd unit in place" "yes" \
           "$(yes_no test -f /lib/systemd/system/zigbee2mqtt.service)"
+}
+
+# Nothing ships the file, so the install has to create it from the template
+test_config_created_on_install() {
+    config=${APP}/data/configuration.yaml
+    template=/usr/share/zigbee2mqtt/configuration.default.yaml
+    check "the configuration is created on install" "yes" "$(yes_no test -e "${config}")"
+    [ -e "${config}" ] || return 0
+    check "it matches the template" "yes" \
+          "$(yes_no cmp -s "${config}" "${template}")"
 }
 
 ### the application itself
@@ -211,13 +237,15 @@ test_serialport_binding_loads() {
 SUITE_DEB="test_control_fields
            test_depends_on_expected_node
            test_contents
+           test_config_is_not_packaged
            test_dependencies_resolvable"
 
 SUITE_INSTALLED="test_installed_version
                  test_files_intact
                  test_version_matches_sources
                  test_size_within_bounds
-                 test_service_unit_installed"
+                 test_service_unit_installed
+                 test_config_created_on_install"
 
 SUITE_APPLICATION="test_application_starts"
 
@@ -227,7 +255,7 @@ SUITE_MODULES="test_node_abi
 
 ALL_SUITES="${SUITE_DEB} ${SUITE_INSTALLED} ${SUITE_APPLICATION} ${SUITE_MODULES}"
 
-run() {
+run_suite() {
     for CURRENT in $1; do "${CURRENT}"; done
 }
 
@@ -257,11 +285,11 @@ main() {
     echo "Node.js available for the install:"
     apt-cache policy nodejs
 
-    section "the .deb file";                   run "${SUITE_DEB}"
+    section "the .deb file";                   run_suite "${SUITE_DEB}"
     section "install";                         install_package
-    section "the installed package";           run "${SUITE_INSTALLED}"
-    section "native modules on this Node.js";  run "${SUITE_MODULES}"
-    section "the application";                 run "${SUITE_APPLICATION}"
+    section "the installed package";           run_suite "${SUITE_INSTALLED}"
+    section "native modules on this Node.js";  run_suite "${SUITE_MODULES}"
+    section "the application";                 run_suite "${SUITE_APPLICATION}"
 
     echo
     echo "=== ${PASSED} passed, ${FAILED} failed, ${SKIPPED} skipped ==="

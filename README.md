@@ -9,7 +9,31 @@ zigbee2mqtt package for Wiren Board repository.
 | `Jenkinsfile` | build parameters and the order of the stages |
 | `scripts/build.sh` | installs Node.js and the toolchain, builds with pnpm, packs with fpm |
 | `scripts/test-deb.sh` | checks the built package before it is uploaded |
-| `package/` | what goes into the package: the service unit, the default config, the upgrade scripts |
+| `package/` | what goes into the package: the service unit, the configuration template, the maintainer scripts |
+
+The configuration on the controller
+-----------------------------------
+
+`/mnt/data/root/zigbee2mqtt/data/configuration.yaml` is not part of the package and is not a dpkg
+conffile: zigbee2mqtt rewrites it itself and keeps the network key, the pan id and the paired
+devices there, so it is state rather than a setting from the maintainer. As a conffile it made
+dpkg ask whether to replace the file whenever the default changed, and an answered "replace"
+destroyed the Zigbee network.
+
+The package carries `package/configuration.default.yaml` as the template, installed as
+`/usr/share/zigbee2mqtt/configuration.default.yaml`, and `package/setup-z2m-config.sh`, installed
+as `/usr/lib/zigbee2mqtt/setup-z2m-config.sh`. That script runs from the maintainer scripts on
+install and upgrade, and from `ExecStartPre` of the service, so a module declared after the
+install is picked up on the next start. It:
+
+- creates the configuration from the template when the controller has none, and never replaces
+  one that is already there;
+- fills in `serial.port` from the hardware configuration of the controller, that is from the slot
+  the user picked in Settings, Extension Modules and Ports. Nothing is probed: talking to ports
+  the user did not declare would disturb whatever else is plugged into the other slots;
+- writes the port only when exactly one Zigbee module is declared and the configuration still
+  carries the port from the template. Zero or several modules, or a port somebody has chosen, and
+  the script only says so in the log.
 
 How to build
 ------------

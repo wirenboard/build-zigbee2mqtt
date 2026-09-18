@@ -95,7 +95,7 @@ allow_node_16_in_engines() {
 }
 
 # One attempt: install everything, compile TypeScript, then drop what only the build needed
-build_once() {
+build_application_once() {
     pnpm install --frozen-lockfile || { echo "pnpm install failed."; return 1; }
 
     # 1.18.1 ships plain JavaScript and has nothing to compile
@@ -110,7 +110,7 @@ build_application() {
     local attempt
     pushd "${SOURCES}" || exit 1
     for attempt in 1 2 3 4 5; do
-        if build_once; then
+        if build_application_once; then
             echo "Build done from ${attempt} tries!"
             popd || exit 1
             return 0
@@ -121,10 +121,15 @@ build_application() {
     exit 1
 }
 
-pack_with_fpm() {
+# The runtime configuration is deliberately not packaged. zigbee2mqtt rewrites
+# data/configuration.yaml itself and keeps the network key, the pan id and the paired devices
+# there, so it is state rather than a setting from the maintainer: as a dpkg conffile it
+# produced the replace-or-keep prompt whenever the default changed, and an answered "replace"
+# destroyed the Zigbee network. The package ships a template instead, and setup-z2m-config.sh
+# creates the file on the controller when there is none.
+pack_deb_with_fpm() {
     local dependency=$1
 
-    cp -f package/configuration.yaml "${SOURCES}/data/configuration.yaml"
     mkdir -p "${RESULT_DIR}"
 
     fpm --input-type dir \
@@ -133,7 +138,7 @@ pack_with_fpm() {
         --version "${VERSION}" \
         --exclude 'mnt/data/root/zigbee2mqtt/.git*' \
         --exclude 'mnt/data/root/zigbee2mqtt/.git/**' \
-        --config-files mnt/data/root/zigbee2mqtt/data/configuration.yaml \
+        --exclude 'mnt/data/root/zigbee2mqtt/data/configuration.yaml' \
         --deb-no-default-config-files \
         --deb-systemd package/zigbee2mqtt.service \
         --deb-systemd-auto-start \
@@ -144,11 +149,14 @@ pack_with_fpm() {
         --url 'https://www.zigbee2mqtt.io/' \
         --vendor 'Wiren Board' \
         --depends "${dependency}" \
+        --after-install package/after-install.sh \
         --before-upgrade package/before-upgrade.sh \
         --after-upgrade package/after-upgrade.sh \
         --package "${RESULT_DIR}/result.deb" \
         "${FPM_EXTRA[@]}" \
-        "${SOURCES}"=/mnt/data/root
+        "${SOURCES}"=/mnt/data/root \
+        package/configuration.default.yaml=/usr/share/zigbee2mqtt/configuration.default.yaml \
+        package/setup-z2m-config.sh=/usr/lib/zigbee2mqtt/setup-z2m-config.sh
 
     dpkg-name "${RESULT_DIR}/result.deb"
 }
@@ -170,7 +178,7 @@ main() {
 
     allow_node_16_in_engines
     build_application
-    pack_with_fpm "${dependency}"
+    pack_deb_with_fpm "${dependency}"
 }
 
 main "$@"
