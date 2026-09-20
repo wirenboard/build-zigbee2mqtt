@@ -145,25 +145,25 @@ build_application() {
     popd || exit 1
 }
 
+# TEMPORARY, goes away with package/backup-z2m-data.sh. dpkg calls one of the two preinst
+# functions fpm generates, so the copy of the data has to be in both. Writes the pair into the
+# file named by the caller, who removes it once fpm has read it
+before_upgrade_with_backup() {
+    cat package/backup-z2m-data.sh package/before-upgrade.sh > "$1"
+}
+
 # The runtime configuration is deliberately not packaged. zigbee2mqtt rewrites
 # "data/configuration.yaml" itself and keeps the network key, the pan id and the paired devices
 # there, so it is state rather than a setting from the maintainer: as a dpkg conffile it
 # produced the replace-or-keep prompt whenever the default changed, and an answered "replace"
 # destroyed the Zigbee network. The package ships a template instead, and setup-z2m-config.sh
 # creates the file on the controller when there is none.
-# TEMPORARY, goes away with package/backup-z2m-data.sh. dpkg calls one of the two preinst
-# functions fpm generates, so the copy has to be in both
-before_upgrade_with_backup() {
-    local combined
-    combined=$(mktemp)
-    cat package/backup-z2m-data.sh package/before-upgrade.sh > "${combined}"
-    echo "${combined}"
-}
-
 pack_deb_with_fpm() {
     local dependency=$1
+    local before_upgrade="${RESULT_DIR}/.before-upgrade-with-backup.sh"
 
     mkdir -p "${RESULT_DIR}"
+    before_upgrade_with_backup "${before_upgrade}"
 
     # TODO: --deb-after-purge package/after-purge.sh, to wipe /mnt/data/root/zigbee2mqtt when the
     # package is purged. fpm 1.18.0 takes the flag and does nothing with it: the option handler
@@ -187,7 +187,7 @@ pack_deb_with_fpm() {
         --depends "${dependency}" \
         --after-install package/after-install.sh \
         --before-install package/backup-z2m-data.sh \
-        --before-upgrade "$(before_upgrade_with_backup)" \
+        --before-upgrade "${before_upgrade}" \
         --after-upgrade package/after-upgrade.sh \
         --package "${RESULT_DIR}/result.deb" \
         "${FPM_EXTRA[@]}" \
@@ -195,6 +195,7 @@ pack_deb_with_fpm() {
         package/configuration.default.yaml=/usr/share/zigbee2mqtt/configuration.default.yaml \
         package/setup-z2m-config.sh=/usr/lib/zigbee2mqtt/setup-z2m-config.sh
 
+    rm -f "${before_upgrade}"
     dpkg-name "${RESULT_DIR}/result.deb"
 }
 

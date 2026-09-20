@@ -11,6 +11,7 @@ zigbee2mqtt package for Wiren Board repository.
 | `scripts/prune-files.sh` | between the two steps: removes what nobody can use on a controller, and answers `--check` |
 | `scripts/test-deb.sh` | checks the built package before it is uploaded |
 | `package/` | what goes into the package: the service unit, the configuration template, the maintainer scripts |
+| `TODO.md` | questions left open, to settle with the team |
 
 Files the package does not carry
 -------------------------------

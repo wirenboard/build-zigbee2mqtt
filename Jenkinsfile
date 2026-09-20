@@ -1,5 +1,14 @@
 // FIXME: generalize this pipeline some day for other 3rdparties
 
+// A push or a repository scan checks only what can be checked without Node.js of the required
+// major: the pipeline parses, the tag resolves, the version is computed, the pool is looked at.
+// Building needs that Node.js in the rootfs, and until it is in the repositories it comes from a
+// testing set, which is a parameter of a build started by hand. Named as in wb-nodejs-packaging
+boolean fullRun() {
+    return currentBuild.getBuildCauses('jenkins.branch.BranchEventCause').isEmpty() &&
+           currentBuild.getBuildCauses('jenkins.branch.BranchIndexingCause').isEmpty()
+}
+
 // One way to build per target, so it follows from the architecture instead of a parameter.
 // ARM: inside the controller rootfs, everything native is compiled under qemu.
 // amd64: devenv has no amd64 rootfs, the devenv container itself is trixie amd64, so it builds there
@@ -56,10 +65,6 @@ void runScript(String script, String variables, String args) {
     }
 }
 
-// Where the package belongs. Controllers take theirs from the release repository, amd64 is built
-// for development machines and goes to dev-tools. Each repository has its own testing sets, named
-// by its own config: a set published with the release config serves armhf and arm64, a set that
-// has to serve amd64 lives in dev-tools. wb.repos gives the upload job and the aptly config
 // The pool lives in a public bucket, so a build can look into it before it spends an hour
 // compiling. wbci-repo does not fail on a version it already has: it logs "already exists in
 // pool", skips the file and leaves the stage green, so a repeat upload changes nothing there.
@@ -81,6 +86,11 @@ List poolVersions(String poolPrefix, String pkg, String arch) {
         .unique()
 }
 
+// Where the package belongs. Controllers take theirs from the release repository; amd64 goes to
+// dev-tools, the only Wiren Board repository the devenv image has. Each repository has its own
+// testing sets, named by its own config: a set published with the release config serves armhf and
+// arm64, a set that has to serve amd64 lives in dev-tools. wb.repos gives the upload job and the
+// aptly config
 Map targetRepo() {
     if (params.WBDEV_TARGET.endsWith('-amd64')) {
         return [name:              'dev-tools',
@@ -123,6 +133,8 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '30', artifactNumToKeepStr: '30'))
         // A build takes 10 to 15 minutes; anything past two hours is stuck, usually in qemu
         timeout(time: 2, unit: 'HOURS')
+        // Two runs share the workspace of the job, and the second one would clean the tree of the first
+        disableConcurrentBuilds()
     }
     parameters {
         string(name: 'REPO', defaultValue: 'https://github.com/Koenkk/zigbee2mqtt', description: 'Repo to get zigbee2mqtt from')
@@ -195,10 +207,17 @@ pipeline {
                     repoType = "testing"
                 }
                 def buildName = "#${BUILD_NUMBER}:${params.WBDEV_TARGET}/${repoType}"
+                if (!fullRun()) {
+                    buildName += " [checks only]"
+                }
                 if (params.TAG) {
                     buildName += " custom_tag=${params.TAG}"
                 }
                 def description = "Build on Node.js ${params.BUILD_AND_REQUIRE_NODEJS} for ${params.WBDEV_TARGET}"
+                if (!fullRun()) {
+                    description = "Checks only, started by a push or a repository scan: the package " +
+                                  "itself is built by a run started by hand. " + description
+                }
                 // Such a package stays out of the regular repositories: an ~exp~ version reaches a
                 // testing set and nothing else. Staging drops those, unstable follows staging
                 def exp = params.ADD_VERSION_SUFFIX && !wb.isBranchRelease(env.BRANCH_NAME)
@@ -351,6 +370,7 @@ pipeline {
             }}
         }
         stage('Build') {
+            when { expression { fullRun() } }
             steps { script {
                 sh "printenv | sort"
                 sh "wbdev root printenv | sort"
@@ -370,6 +390,7 @@ pipeline {
         // vitest to run it there, and the state of an incremental TypeScript compile. The script
         // names the candidates for later. build.sh asks it with --check before it packs
         stage('Remove files a controller cannot use') {
+            when { expression { fullRun() } }
             steps {
                 runScript('prune-files.sh', "", "${PROJECT_SUBDIR}")
             }
@@ -381,6 +402,7 @@ pipeline {
         }
 
         stage('Pack .deb') {
+            when { expression { fullRun() } }
             steps { script {
                 runScript('build.sh',
                           "BUILD_AND_REQUIRE_NODEJS='${params.BUILD_AND_REQUIRE_NODEJS}' " +
@@ -399,6 +421,7 @@ pipeline {
         // Nothing leaves the build unchecked: the package is opened where it was built, and its
         // native modules are loaded on the Node.js it declares
         stage('Test deb') {
+            when { expression { fullRun() } }
             steps {
                 runScript('test-deb.sh',
                           "BUILD_AND_REQUIRE_NODEJS='${params.BUILD_AND_REQUIRE_NODEJS}'",
@@ -421,7 +444,7 @@ pipeline {
         // wbDeploy uploads every archived .deb of this build, which is why only result/*.deb is archived
         stage('Setup deploy') {
             when { expression {
-                params.UPLOAD_TO_POOL
+                fullRun() && params.UPLOAD_TO_POOL
             }}
             steps { script {
                 wbDeploy projectSubdir: env.PROJECT_SUBDIR,
