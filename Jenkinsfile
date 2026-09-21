@@ -173,7 +173,7 @@ pipeline {
         PROJECT_SUBDIR = 'zigbee2mqtt'
         RESULT_SUBDIR = 'result'
 
-        // The place the build runs. Test deb uses the same method, so the package is checked on a
+        // The place the build runs. Test .deb uses the same method, so the package is checked on a
         // rootfs of the same kind, with the Node.js of the same version installed anew by apt
         WBDEV_BUILD_METHOD = "qemuchroot"
         WBDEV_USE_UNSTABLE_DEPS = "${unstableDeps()}"
@@ -420,7 +420,7 @@ pipeline {
         }
         // Nothing leaves the build unchecked: the package is opened where it was built, and its
         // native modules are loaded on the Node.js it declares
-        stage('Test deb') {
+        stage('Test .deb') {
             when { expression { fullRun() } }
             steps {
                 runScript('test-deb.sh',
@@ -442,7 +442,7 @@ pipeline {
             }
         }
         // wbDeploy uploads every archived .deb of this build, which is why only result/*.deb is archived
-        stage('Setup deploy') {
+        stage('Upload .deb to apt pool') {
             when { expression {
                 fullRun() && params.UPLOAD_TO_POOL
             }}
