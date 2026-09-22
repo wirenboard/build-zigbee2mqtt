@@ -1,14 +1,11 @@
 #!/bin/sh
-# Runs on the controller after an upgrade has unpacked the new package.
-# fpm inlines this file into the body of a function of the generated maintainer script, so the
-# shebang and any "set" here would have no effect, and a failing command does not stop the upgrade.
-# That is why every step below reports for itself.
+# Runs on the controller after an upgrade unpacked the new package. fpm inlines it: README.md,
+# "The maintainer scripts"
 
 CONFIG_FILE=/mnt/data/root/zigbee2mqtt/data/configuration.yaml
 
-# The configuration does not travel inside the package any more, so nothing had to be saved before
-# the upgrade and nothing is restored here. This creates the file when the controller has none and
-# fills in the serial port from the slot picked in the web interface.
+# The configuration does not travel in the package, so nothing is saved before the upgrade and
+# nothing is restored here. This creates it when there is none and fills in the serial port
 /usr/lib/zigbee2mqtt/setup-z2m-config.sh
 
 echo "Adding dependencies for pnpm"

@@ -1,9 +1,7 @@
 #!/bin/sh
 # TEMPORARY. Copies the data of zigbee2mqtt into /var/backups before an install or an upgrade.
 # Why it is here and when it goes away: README.md, "Copy of the data before an install".
-#
-# fpm inlines this file into the body of a function of the generated maintainer script, so the
-# shebang and any "set" here have no effect, and a failing command does not stop the install.
+# fpm inlines it: README.md, "The maintainer scripts"
 
 Z2M_DATA_PATH=/mnt/data/root/zigbee2mqtt/data
 Z2M_BACKUP_PATH=/var/backups/zigbee2mqtt

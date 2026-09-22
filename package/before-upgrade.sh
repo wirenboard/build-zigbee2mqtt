@@ -1,8 +1,6 @@
 #!/bin/sh
-# Runs on the controller before an upgrade unpacks the new package.
-# fpm inlines this file into the body of a function of the generated maintainer script, so the
-# shebang and any "set" here would have no effect, and a failing command does not stop the upgrade.
-# That is why every step below reports for itself.
+# Runs on the controller before an upgrade unpacks the new package. fpm inlines it: README.md,
+# "The maintainer scripts"
 
 # The configuration is no longer a dpkg conffile and no longer travels inside the package, so
 # there is nothing to save here: dpkg has no reason to touch "data/configuration.yaml" at all.
