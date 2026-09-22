@@ -112,8 +112,9 @@ The three copies are the newest three by time. They are there for the usual way 
 noticed: an upgrade breaks something, the user tries once more, and only then starts looking for
 what was there before.
 
-To remove this logic: delete `package/backup-z2m-data.sh`, the two fpm flags in
-`scripts/build.sh` that inline it, and `test_data_copied_to_var_backups` in `scripts/test-deb.sh`.
+To remove this logic: delete `package/backup-z2m-data.sh`; in `scripts/build.sh` the two fpm flags
+that inline it, `before_upgrade_with_backup()`, the `before_upgrade` local it fills and the `rm -f`
+that follows the fpm call; and `test_data_copied_to_var_backups` in `scripts/test-deb.sh`.
 
 The configuration on the controller
 -----------------------------------

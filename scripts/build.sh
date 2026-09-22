@@ -238,7 +238,11 @@ main() {
     case "${STEP}" in
         build) build_step "${dependency}" ;;
         pack)  pack_step  "${dependency}" ;;
-        all)   build_step "${dependency}"; pack_step "${dependency}" ;;
+        # The job prunes in a stage of its own between the two steps, so one run has to do
+        # it here: pack_step asks the same script whether the tree is clean
+        all)   build_step "${dependency}"
+               bash "$(dirname "$0")/prune-files.sh" "${SOURCES}"
+               pack_step "${dependency}" ;;
     esac
 }
 

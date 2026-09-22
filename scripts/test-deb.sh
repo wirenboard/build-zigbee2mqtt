@@ -109,7 +109,10 @@ expected_package() { expected_dependency | sed 's/ .*//'; }
 
 # apt_errors <log>: the lines that say what went wrong, or the tail when there are none
 apt_errors() {
-    if ! grep -E '^(E:|dpkg: )' "$1" | head -10 | sed 's/^/        /' | grep -q .; then
+    errors=$(grep -E '^(E:|dpkg: )' "$1" | head -10)
+    if [ -n "${errors}" ]; then
+        sed 's/^/        /' <<<"${errors}"
+    else
         tail -10 "$1" | sed 's/^/        /'
     fi
 }

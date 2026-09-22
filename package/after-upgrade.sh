@@ -14,7 +14,9 @@ pnpm install --prod --frozen-lockfile --force --prefix /mnt/data/root/zigbee2mqt
 
 # Keys the package has started to rely on reach existing configurations only from here: the file
 # belongs to the user now, and a changed template does not travel to controllers by itself
-if ! grep -Pzq 'serial:\n(  .*\n)*  adapter: zstack' "${CONFIG_FILE}"; then
+# The file has to exist for the two blocks below: setup-z2m-config.sh never fails, and without
+# this check "cat >>" would create a configuration holding nothing but "availability:"
+if [ -e "${CONFIG_FILE}" ] && ! grep -Pzq 'serial:\n(  .*\n)*  adapter: zstack' "${CONFIG_FILE}"; then
     LINE=$(awk '
         /^serial:/ { inside=1; next }
         inside && /^[^ ]/ { exit }
@@ -30,7 +32,7 @@ if ! grep -Pzq 'serial:\n(  .*\n)*  adapter: zstack' "${CONFIG_FILE}"; then
     echo "zstack adapter type added to the configuration file"
 fi
 
-if ! grep -q '^availability:' "${CONFIG_FILE}"; then
+if [ -e "${CONFIG_FILE}" ] && ! grep -q '^availability:' "${CONFIG_FILE}"; then
     cat >> "${CONFIG_FILE}" <<'EOF'
 availability:
   enabled: true

@@ -129,11 +129,21 @@ void writeChangelogEntry(String pkgVersion) {
          "is what the package will carry.\n\n" + readFile('debian/changelog')
 }
 
+// The name of the package built here: with VERSION_TO_NAME the version goes into the name, for
+// an old release kept beside the current one. Computed like version(), so a stage restarted on
+// its own gets the same answer instead of an empty environment variable
+String packageName() {
+    if (params.VERSION_TO_NAME) {
+        return "zigbee2mqtt-${upstreamVersion()}"
+    }
+    return 'zigbee2mqtt'
+}
+
 // The arguments of build.sh, the same for both of its steps
 String buildArguments() {
     String special = params.VERSION_TO_NAME
         ? "--provides zigbee2mqtt --conflicts zigbee2mqtt --replaces zigbee2mqtt" : ""
-    return "${env.PKG_NAME} ${version()} ${env.PROJECT_SUBDIR} ${env.RESULT_SUBDIR} ${special}"
+    return "${packageName()} ${version()} ${env.PROJECT_SUBDIR} ${env.RESULT_SUBDIR} ${special}"
 }
 
 // Runs one of scripts/ where this target is built, with the variables that script reads.
@@ -152,10 +162,16 @@ void runScript(String script, String variables, String args) {
 List poolVersions(String poolPrefix, String pkg, String arch) {
     String suffix = "_${arch}.deb"
     String bucket = 'https://s3-eu-west-1.amazonaws.com/deb.wirenboard.com'
+    // In two steps on purpose: in one pipeline the exit code would be the one of sort, and a
+    // failed request would read as an empty pool, which is the answer that lets an upload through
+    sh "curl -sS --fail --max-time 60 '${bucket}?list-type=2" +
+       "&prefix=${poolPrefix}/pool/main/${pkg[0]}/${pkg}/' -o pool-listing.xml"
+    if (!readFile('pool-listing.xml').contains('ListBucketResult')) {
+        error("the answer of ${bucket} is not a listing of the pool, see pool-listing.xml")
+    }
     String listing = sh(returnStdout: true, script:
-        "curl -sS --max-time 60 '${bucket}?list-type=2" +
-        "&prefix=${poolPrefix}/pool/main/${pkg[0]}/${pkg}/'" +
-        " | grep -oE '<Key>[^<]+' | sed 's|.*/||' | sort -V").trim()
+        "grep -oE '<Key>[^<]+' pool-listing.xml | sed 's|.*/||' | sort -V || true").trim()
+    sh 'rm -f pool-listing.xml'
 
     // The bucket holds a twin of every ~exp~ upload, with the pluses of the version turned
     // into spaces: same size, same content, another key. One of the two is enough here
@@ -385,10 +401,7 @@ pipeline {
                 if (env.PKG_VERSION != baseVersion()) {
                     writeChangelogEntry(env.PKG_VERSION)
                 }
-                env.PKG_NAME = 'zigbee2mqtt'
-                if (params.VERSION_TO_NAME) {
-                    env.PKG_NAME = "zigbee2mqtt-${upstreamVersion()}"
-                }
+                echo "Package name: ${packageName()}"
             }}
         }
         // What the pool has now, and what this build would do to it. Before the long part, because
@@ -397,13 +410,13 @@ pipeline {
             steps { script {
                 Map repo = targetRepo()
                 String arch = params.WBDEV_TARGET.tokenize('-').last()
-                List versions = poolVersions(repo.poolPrefix, env.PKG_NAME, arch)
+                List versions = poolVersions(repo.poolPrefix, packageName(), arch)
 
                 if (versions.isEmpty()) {
-                    echo "Pool of ${repo.name}: no ${env.PKG_NAME} for ${arch} there yet"
+                    echo "Pool of ${repo.name}: no ${packageName()} for ${arch} there yet"
                 } else {
                     // The whole list, so the log keeps what the pool held at the time of this build
-                    echo "Pool of ${repo.name}, ${versions.size()} ${env.PKG_NAME} ${arch} package(s):\n  " +
+                    echo "Pool of ${repo.name}, ${versions.size()} ${packageName()} ${arch} package(s):\n  " +
                          versions.join('\n  ')
                     echo "Newest in the pool: ${versions.last()}"
                 }
