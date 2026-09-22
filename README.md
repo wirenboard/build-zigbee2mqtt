@@ -42,8 +42,8 @@ Copy of the data before an install
 ----------------------------------
 
 **This is temporary.** `package/backup-z2m-data.sh` copies `/mnt/data/root/zigbee2mqtt/data` into
-`/var/backups/zigbee2mqtt/<date>T<time>` before every install and every upgrade, and never removes
-an earlier copy.
+`/var/backups/zigbee2mqtt/<date>T<time>` before every install and every upgrade, and keeps the
+three newest copies.
 
 The reason is a real case: an upgrade stopped half way, the tree of the application was left
 without `data`, and the configuration went with it, network key and paired devices included. Until
@@ -53,6 +53,38 @@ configuration is gone" is a path.
 `/var/backups` was picked because it is where Debian itself keeps copies of `dpkg`, `apt` and
 `alternatives` state, it survives `apt purge` of this package, nothing rotates it by a timer, and
 it does not depend on where the application keeps its data.
+
+It is on the root filesystem on purpose, and not on `/mnt/data`: the controllers are moving
+towards one large root partition, with `/mnt/data` gone, and a copy written under `/var` keeps
+working after that change without anyone remembering this script.
+
+A copy is not an archive: it is a directory with the files as they were, copied with `cp -a`.
+Only the files that lie in `data` itself are taken, so `log` does not travel; `wb-backup-info.txt`
+is written by the script and names the version that was installed before that run:
+
+```
+/var/backups/zigbee2mqtt/2026-09-23T14-05-01/
+    configuration.yaml
+    coordinator_backup.json
+    database.db
+    state.json
+    wb-backup-info.txt
+```
+
+To put such a copy back, with the service stopped:
+
+```
+$ systemctl stop zigbee2mqtt
+$ cp -a /var/backups/zigbee2mqtt/<date>T<time>/*.yaml \
+        /var/backups/zigbee2mqtt/<date>T<time>/*.json \
+        /var/backups/zigbee2mqtt/<date>T<time>/database.db \
+        /mnt/data/root/zigbee2mqtt/data/
+$ systemctl start zigbee2mqtt
+```
+
+The three copies are the newest three by time. They are there for the usual way trouble is
+noticed: an upgrade breaks something, the user tries once more, and only then starts looking for
+what was there before.
 
 To remove this logic: delete `package/backup-z2m-data.sh`, the two fpm flags in
 `scripts/build.sh` that inline it, and `test_data_copied_to_var_backups` in `scripts/test-deb.sh`.

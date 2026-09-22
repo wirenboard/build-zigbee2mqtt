@@ -23,6 +23,15 @@ else
         echo "installed version before this run: ${version_before:-none}" \
             > "${backup_path}/wb-backup-info.txt"
         echo "zigbee2mqtt: the data of this installation is copied to ${backup_path}"
+        # Three newest copies are kept: a user upgrades, something breaks, they try once more and
+        # only then start looking. Anything older helps nobody, and /var is on the root filesystem.
+        # By time and not by name: within one second the names carry a suffix, and "...-05-18-2"
+        # sorts before "...-05-18", so the newest copy would be the one to go
+        ls -1dt "${Z2M_BACKUP_PATH}"/*/ 2>/dev/null | tail -n +4 |
+            while read -r older_copy; do
+                echo "zigbee2mqtt: removing the older copy ${older_copy}"
+                rm -rf "${older_copy}"
+            done
     else
         echo "zigbee2mqtt: could not copy ${Z2M_DATA_PATH} to ${backup_path}" >&2
     fi

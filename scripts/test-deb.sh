@@ -206,6 +206,15 @@ test_data_copied_to_var_backups() {
         apt_errors /tmp/backup-install.log
     check "the next install adds one more"  "$((before + 2))" "$(copies_in "${backups}")"
 
+    # Two more, so that more copies than the limit have been made
+    apt-get install -y --reinstall "${DEB}" > /tmp/backup-install.log 2>&1 ||
+        apt_errors /tmp/backup-install.log
+    apt-get install -y --reinstall "${DEB}" > /tmp/backup-install.log 2>&1 ||
+        apt_errors /tmp/backup-install.log
+    check "only three copies are kept"      "3"   "$(copies_in "${backups}")"
+    check "the newest copy is the last one" "yes" \
+          "$(yes_no grep -rq 'wb-backup-marker' "${backups}")"
+
     sed -i '/wb-backup-marker/d' "${APP}/data/configuration.yaml"
     allow_service_start
 }
