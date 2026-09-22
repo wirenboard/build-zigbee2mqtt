@@ -1,0 +1,14 @@
+zigbee2mqtt (2.14.1-wb102) stable; urgency=medium
+
+  * configuration.yaml is no longer a dpkg conffile: created from a template only when missing
+  * serial.port is set from the Zigbee module slot picked in the hardware settings
+  * the data of zigbee2mqtt is copied to /var/backups/zigbee2mqtt before install and upgrade
+  * the package version comes from debian/changelog instead of the job parameters
+
+ -- Vitalii Gaponov <vitalii.gaponov@wirenboard.com>  Wed, 23 Sep 2026 12:00:00 +0300
+
+zigbee2mqtt (2.14.1-wb101) stable; urgency=medium
+
+  * New upstream release: Wiren Board build of zigbee2mqtt 2.14.1 for the controllers
+
+ -- Vitalii Gaponov <vitalii.gaponov@wirenboard.com>  Mon, 21 Sep 2026 09:07:00 +0300

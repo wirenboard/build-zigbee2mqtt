@@ -16,9 +16,8 @@
 # happened in that rootfs.
 #
 # Version examples, as the Jenkinsfile passes them:
-#   2.3.0-wb101                                        main with TAG=2.3.0
+#   2.14.1-wb102                                       main, the version on top of debian/changelog
 #   2.1.1-wb101~exp~feature+increase+nodejs~1~g6f19836  a branch
-#   2.3.0-2-g9d1427c-wb101~exp~...                     a branch with no tag, version from git describe
 
 set -euo pipefail
 set -x
@@ -152,12 +151,9 @@ before_upgrade_with_backup() {
     cat package/backup-z2m-data.sh package/before-upgrade.sh > "$1"
 }
 
-# The runtime configuration is deliberately not packaged. zigbee2mqtt rewrites
-# "data/configuration.yaml" itself and keeps the network key, the pan id and the paired devices
-# there, so it is state rather than a setting from the maintainer: as a dpkg conffile it
-# produced the replace-or-keep prompt whenever the default changed, and an answered "replace"
-# destroyed the Zigbee network. The package ships a template instead, and setup-z2m-config.sh
-# creates the file on the controller when there is none.
+# "data/configuration.yaml" is excluded on purpose: the package ships a template instead, and
+# setup-z2m-config.sh creates the file on the controller when there is none. Why:
+# README.md, "The configuration on the controller"
 pack_deb_with_fpm() {
     local dependency=$1
     local before_upgrade="${RESULT_DIR}/.before-upgrade-with-backup.sh"
@@ -183,6 +179,7 @@ pack_deb_with_fpm() {
         --maintainer 'Wiren Board Robot <info@wirenboard.com>' \
         --description 'Zigbee to MQTT bridge (package by Wiren Board team)' \
         --url 'https://www.zigbee2mqtt.io/' \
+        --deb-changelog debian/changelog \
         --vendor 'Wiren Board' \
         --depends "${dependency}" \
         --after-install package/after-install.sh \

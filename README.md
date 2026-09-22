@@ -11,6 +11,7 @@ zigbee2mqtt package for Wiren Board repository.
 | `scripts/prune-files.sh` | between the two steps: removes what nobody can use on a controller, and answers `--check` |
 | `scripts/test-deb.sh` | checks the built package before it is uploaded |
 | `package/` | what goes into the package: the service unit, the configuration template, the maintainer scripts |
+| `debian/changelog` | the version of the package, the only place it is set; packed as the changelog of the package |
 | `TODO.md` | questions left open, to settle with the team |
 
 Files the package does not carry
@@ -79,6 +80,15 @@ install is picked up on the next start. It:
 - writes the port only when exactly one Zigbee module is declared and the configuration still
   carries the port from the template. Zero or several modules, or a port somebody has chosen, and
   the script only says so in the log.
+
+The maintainer scripts
+----------------------
+
+`package/after-install.sh`, `package/before-upgrade.sh`, `package/after-upgrade.sh` and
+`package/backup-z2m-data.sh` run on the controller, and fpm inlines each of them into the body of
+a function of the maintainer script it generates. The shebang and any `set` in such a file have no
+effect there, and a failing command does not stop the install: that is why every step in them
+reports for itself instead of relying on an exit code.
 
 How to build
 ------------

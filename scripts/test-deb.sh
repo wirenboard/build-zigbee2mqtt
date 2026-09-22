@@ -155,6 +155,16 @@ test_control_fields() {
     info  "version"      "$(deb_field Version)"
 }
 
+# The Jenkinsfile writes the version of a branch build into debian/changelog, and fpm packs that
+# file: the entry on top has to name the version the package carries, or one of the two is stale
+test_changelog_matches_version() {
+    top=$(dpkg-deb --fsys-tarfile "${DEB}" |
+          tar -xOf - --wildcards "*usr/share/doc/$(deb_field Package)/changelog.Debian.gz" 2>/dev/null |
+          gzip -dc 2>/dev/null | head -n 1)
+    check "the version on top of the packaged changelog" "$(deb_field Version)" \
+          "$(sed -n 's/^[^ ]* (\([^)]*\)).*/\1/p' <<<"${top}")"
+}
+
 # The native modules are built for one ABI, so the package must not install on another major
 test_depends_on_expected_node() {
     check "depends on the Node.js it was built with" "$(expected_dependency)" "$(deb_field Depends)"
@@ -293,7 +303,7 @@ test_files_intact() {
     check "files dpkg finds changed or missing" "0" "$(grep -c '[^[:space:]]' <<<"${listed}")"
 }
 
-# git describe can name a version the tree does not carry, and fpm would package it anyway
+# debian/changelog can name a version the tree does not carry, and fpm would package it anyway
 test_version_matches_sources() {
     need_command node || return 0
     in_sources=$(node -p "require('${APP}/package.json').version")
@@ -442,6 +452,7 @@ test_upgrade_keeps_config() {
 ### the suites, in the order they run
 
 SUITE_DEB="test_control_fields
+           test_changelog_matches_version
            test_depends_on_expected_node
            test_contents
            test_developer_files_not_packaged

@@ -48,11 +48,92 @@ String exitMeaning(String script, int code) {
     return 'not a code of the script: under set -e the code of the command that failed goes out as it is'
 }
 
+// The version helpers below are those of wb-nodejs-packaging, with zigbee2mqtt in place of Node.js
+
+// changelogField <name>: a field of the entry on top of debian/changelog, Version or Distribution.
+// dpkg-parsechangelog reads the file the way the package build does; it lives in the wbdev
+// container, because the agent has no dpkg-dev, and the container takes about a second to start
+String changelogField(String name) {
+    return sh(returnStdout: true, script: "wbdev user dpkg-parsechangelog -S ${name}").trim()
+}
+
+// The package version lives in debian/changelog and only there: zigbee2mqtt (2.14.1-wb102) stable; ...
+// The answer is kept in the environment, so the container starts once. A stage restarted on its
+// own starts with an empty environment and asks again; the checkout gives the same answer. On a
+// branch build the entry already carries the suffix by then, and the base version is what is left
+String baseVersion() {
+    if (env.WB_BASE_VERSION) {
+        return env.WB_BASE_VERSION
+    }
+    def parsed = changelogField('Version')
+    if (!(parsed ==~ /\d+\.\d+\.\d+-wb\d+(~\S+)?/)) {
+        error("debian/changelog names the version '${parsed}', expected '<zigbee2mqtt tag>-wb<N>'")
+    }
+    env.WB_BASE_VERSION = parsed.replaceFirst(/~.*$/, '')
+    return env.WB_BASE_VERSION
+}
+
+// The upstream tag this package is built from: 2.14.1-wb102 builds the tag 2.14.1
+String upstreamVersion() {
+    return baseVersion().replaceFirst(/-wb\d+$/, '')
+}
+
+// Computed once in 'Determine version suffix'. A stage restarted on its own starts with an empty
+// env, so it is computed again here; the answer depends only on the checkout and the branch
+String versionSuffix() {
+    if (env.WB_VERSION_SUFFIX != null) {
+        return env.WB_VERSION_SUFFIX
+    }
+    if (!params.ADD_VERSION_SUFFIX || wb.isBranchRelease(env.BRANCH_NAME)) {
+        return ''
+    }
+    def suffix = wb.makeVersionSuffixFromBranch(wb.getMainBranchName())
+    if (!suffix) {
+        return ''
+    }
+    return suffix
+}
+
+// 'Determine version' writes this version into debian/changelog, and fpm packs that file as the
+// changelog of the package, so the entry on top and the Version field always agree
+String version() {
+    if (env.PKG_VERSION) {
+        return env.PKG_VERSION
+    }
+    return baseVersion() + versionSuffix()
+}
+
+// The entry wb.addVersionSuffix() writes for library jobs, with two differences: the distribution
+// of the previous entry is kept, because dch writes UNRELEASED otherwise, and the values reach the
+// command line through the environment and a file, so quotes in a commit message or in a name
+// cannot break it
+void writeChangelogEntry(String pkgVersion) {
+    // A stage restarted on its own meets the entry its first run wrote
+    if (changelogField('Version') == pkgVersion) {
+        echo "debian/changelog already carries ${pkgVersion}, no second entry is written"
+        return
+    }
+    writeFile file: 'changelog-entry.tmp',
+              text: '(Version is generated automatically by CI/CD)\n' + wb.getGitCommitMessage()
+    withEnv(["DCH_NAME=${wb.getGitCommitAuthor()}",
+             "DCH_EMAIL=${wb.getGitCommitAuthorEmail()}",
+             "DCH_VERSION=${pkgVersion}",
+             "DCH_DIST=${changelogField('Distribution')}"]) {
+        // -b: the branch version sorts below the one already in the changelog, and dch stops on that
+        sh 'wbdev user env DEBFULLNAME="$DCH_NAME" DEBEMAIL="$DCH_EMAIL" ' +
+           'dch --newversion "$DCH_VERSION" --distribution "$DCH_DIST" ' +
+           '--force-distribution -b "$(cat changelog-entry.tmp)"'
+    }
+    sh 'rm -f changelog-entry.tmp'
+    echo "debian/changelog of this build: the entry on top is the one just written, and this\n" +
+         "is what the package will carry.\n\n" + readFile('debian/changelog')
+}
+
 // The arguments of build.sh, the same for both of its steps
 String buildArguments() {
     String special = params.VERSION_TO_NAME
         ? "--provides zigbee2mqtt --conflicts zigbee2mqtt --replaces zigbee2mqtt" : ""
-    return "${env.PKG_NAME} ${env.VERSION} ${env.PROJECT_SUBDIR} ${env.RESULT_SUBDIR} ${special}"
+    return "${env.PKG_NAME} ${version()} ${env.PROJECT_SUBDIR} ${env.RESULT_SUBDIR} ${special}"
 }
 
 // Runs one of scripts/ where this target is built, with the variables that script reads.
@@ -65,11 +146,9 @@ void runScript(String script, String variables, String args) {
     }
 }
 
-// The pool lives in a public bucket, so a build can look into it before it spends an hour
-// compiling. wbci-repo does not fail on a version it already has: it logs "already exists in
-// pool", skips the file and leaves the stage green, so a repeat upload changes nothing there.
-// Returns the versions of this package for this architecture that are in the pool now, oldest
-// first; the order is sort -V, good enough to name the newest in a log line
+// The versions of this package for this architecture that are in the pool now, oldest first:
+// the pool is a public bucket, so a build can look into it before it spends an hour compiling.
+// Why this is checked at all: Jenkins-guide.md, "FORCE_OVERWRITE"
 List poolVersions(String poolPrefix, String pkg, String arch) {
     String suffix = "_${arch}.deb"
     String bucket = 'https://s3-eu-west-1.amazonaws.com/deb.wirenboard.com'
@@ -86,11 +165,9 @@ List poolVersions(String poolPrefix, String pkg, String arch) {
         .unique()
 }
 
-// Where the package belongs. Controllers take theirs from the release repository; amd64 goes to
-// dev-tools, the only Wiren Board repository the devenv image has. Each repository has its own
-// testing sets, named by its own config: a set published with the release config serves armhf and
-// arm64, a set that has to serve amd64 lives in dev-tools. wb.repos gives the upload job and the
-// aptly config
+// Where the package belongs: controllers take theirs from the release repository, amd64 goes to
+// dev-tools. Each repository has its own testing sets, with its own aptly config, and wb.repos
+// gives the upload job. Which and why: Jenkins-guide.md, "WBDEV_TARGET"
 Map targetRepo() {
     if (params.WBDEV_TARGET.endsWith('-amd64')) {
         return [name:              'dev-tools',
@@ -139,10 +216,8 @@ pipeline {
     parameters {
         string(name: 'REPO', defaultValue: 'https://github.com/Koenkk/zigbee2mqtt', description: 'Repo to get zigbee2mqtt from')
         string(name: 'BRANCH', defaultValue: 'master', description: 'For checkout step')
-        string(name: 'TAG', defaultValue: '', description: 'Use with VERSION_TO_NAME to build custom version (leave empty for find and use latest tag automatically)')
         booleanParam(name: 'VERSION_TO_NAME', defaultValue: false, description: 'Adds version number to package name as suffix, creating names like zigbee2mqtt-1.18.1')
         booleanParam(name: 'ADD_VERSION_SUFFIX', defaultValue: true, description: 'For dev branches only')
-        string(name: 'WB_REVISION', defaultValue: '-wb101', description: 'For rebuilds, like -wb101')
         string(name: 'WBDEV_IMAGE', defaultValue: '', description: 'Docker image to use as devenv')
         string(name: 'WBDEV_TESTING_SETS', defaultValue: '',
                 description: 'Comma-separated testing set names: their experimental.<name> repositories are added to the rootfs above testing and unstable, so packages from them win. Trixie targets only. With UPLOAD_TO_POOL only for an ~exp~ version, which reaches testing sets and nothing else')
@@ -187,8 +262,6 @@ pipeline {
             script {
                 // These values go into shell command lines: allow only what they legitimately contain
                 def formats = [
-                    TAG:          /^[A-Za-z0-9._\/+-]*$/,
-                    WB_REVISION:  /^-wb\d+$/,
                     WBDEV_IMAGE:  /^[A-Za-z0-9._\/:@-]*$/,
                     NPM_REGISTRY: /^(https?:\/\/[A-Za-z0-9._~:\/@%+-]+)?$/,
                 ]
@@ -206,13 +279,11 @@ pipeline {
                 if (params.USE_TESTING_REPOSITORY) {
                     repoType = "testing"
                 }
-                def buildName = "#${BUILD_NUMBER}:${params.WBDEV_TARGET}/${repoType}"
-                if (!fullRun()) {
-                    buildName += " [checks only]"
+                def kind = 'checks only'
+                if (fullRun()) {
+                    kind = 'full'
                 }
-                if (params.TAG) {
-                    buildName += " custom_tag=${params.TAG}"
-                }
+                def buildName = "#${BUILD_NUMBER}: ${baseVersion()}/${params.WBDEV_TARGET}/${repoType} [${kind}]"
                 def description = "Build on Node.js ${params.BUILD_AND_REQUIRE_NODEJS} for ${params.WBDEV_TARGET}"
                 if (!fullRun()) {
                     description = "Checks only, started by a push or a repository scan: the package " +
@@ -221,6 +292,11 @@ pipeline {
                 // Such a package stays out of the regular repositories: an ~exp~ version reaches a
                 // testing set and nothing else. Staging drops those, unstable follows staging
                 def exp = params.ADD_VERSION_SUFFIX && !wb.isBranchRelease(env.BRANCH_NAME)
+                // A non-release branch reaches the pool only with the branch suffix: an ~exp~ version for testing sets
+                if (params.UPLOAD_TO_POOL && !wb.isBranchRelease(env.BRANCH_NAME) && !params.ADD_VERSION_SUFFIX) {
+                    error("UPLOAD_TO_POOL on '${env.BRANCH_NAME}', which is not a release branch, needs ADD_VERSION_SUFFIX: " +
+                          "without the branch suffix the version stays ${baseVersion()} and passes for a release.")
+                }
                 def repo = targetRepo()
                 if (params.UPLOAD_TO_POOL) {
                     description += ", uploads to ${repo.name} (${repo.uploadJob})"
@@ -264,35 +340,16 @@ pipeline {
         stage('Checkout') { steps { dir("$PROJECT_SUBDIR") {
             git branch: params.BRANCH, url: params.REPO
         }}}
-        stage('Find latest tag') {
-            when { expression {
-                params.TAG == ""
-            }}
-            steps { dir("$PROJECT_SUBDIR") { script {
+        // The upstream tag is named by debian/changelog, see baseVersion()
+        stage('Checkout tag') {
+            steps { script {
+              // Before dir(): a restarted stage reads debian/changelog again, and it is in the root
+              String tag = upstreamVersion()
+              dir("$PROJECT_SUBDIR") {
                 sshagent (credentials: ['jenkins-github-public-ssh']) {
                     sh 'git config --add remote.origin.fetch "+refs/tags/*:refs/tags/*" && git fetch --all'
-                    env.LATEST_TAG = sh(returnStdout: true, script: "git tag --sort=-creatordate | head -n 1").trim()
-                    echo "Found latest tag: ${env.LATEST_TAG}"
-
-                    currentBuild.displayName += " latest_tag=${env.LATEST_TAG}"
-                }
-            }}}
-        }
-        stage('Checkout tag') {
-            when { expression {
-                (params.TAG != "") || (env.LATEST_TAG != null)
-            }}
-            steps { dir("$PROJECT_SUBDIR") {
-                sshagent (credentials: ['jenkins-github-public-ssh']) {
-                    sh 'git config --add remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*" && git fetch --all'
-                    script {
-                        def tagToUse = params.TAG
-                        if (!tagToUse) {
-                            tagToUse = env.LATEST_TAG
-                        }
-                        echo "Checking out tag: ${tagToUse}"
-                        sh "git checkout ${tagToUse}"
-                    }
+                    echo "Checking out tag: ${tag}"
+                    sh "git checkout ${tag}"
                 }
                 sh 'git clean -xdf'
 
@@ -302,9 +359,12 @@ pipeline {
                 //        in big packet we can find pnpm pakages dublicates
                 echo "File list before build start:"
                 sh "ls -lahR --color=auto"
+              }
             }}
         }
-        stage('Determine version suffix (this repo)') {
+        // Named as in wb-nodejs-packaging and in the jenkins-pipeline-lib jobs: the suffix of a
+        // branch build is decided in one place, and a release build shows the stage as skipped
+        stage('Determine version suffix') {
             when { expression {
                 params.ADD_VERSION_SUFFIX && !wb.isBranchRelease(env.BRANCH_NAME)
             }}
@@ -312,28 +372,24 @@ pipeline {
                 sshagent (credentials: ['jenkins-github-public-ssh']) {
                     sh 'git config --add remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*" && git fetch --all'
                 }
-                env.WB_VERSION_SUFFIX = wb.makeVersionSuffixFromBranch(wb.getMainBranchName())
+                env.WB_VERSION_SUFFIX = versionSuffix()
+                echo "Version suffix: ${env.WB_VERSION_SUFFIX}"
             }}
         }
+        // The version of this build, and the changelog entry that carries it into the package
         stage('Determine version') {
-            steps { dir("$PROJECT_SUBDIR") { script {
-                sshagent (credentials: ['jenkins-github-public-ssh']) {
-                    sh 'git config --add remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*" && git fetch --all'
+            steps { script {
+                env.PKG_VERSION = baseVersion() + versionSuffix()
+                echo "Base version from debian/changelog: ${baseVersion()}"
+                echo "Version of this build: ${env.PKG_VERSION}"
+                if (env.PKG_VERSION != baseVersion()) {
+                    writeChangelogEntry(env.PKG_VERSION)
                 }
-                env.PURE_VERSION = sh(returnStdout: true, script: "git describe --tags | sed 's/zigbee2mqtt-//'").trim()
-                // The suffix stage runs for branches only, so a release build has nothing to add here
-                def suffix = ''
-                if (env.WB_VERSION_SUFFIX) {
-                    suffix = env.WB_VERSION_SUFFIX
-                }
-                env.VERSION = env.PURE_VERSION + params.WB_REVISION + suffix
                 env.PKG_NAME = 'zigbee2mqtt'
                 if (params.VERSION_TO_NAME) {
-                    env.PKG_NAME = "zigbee2mqtt-${env.PURE_VERSION}"
+                    env.PKG_NAME = "zigbee2mqtt-${upstreamVersion()}"
                 }
-                echo "Pure version: $PURE_VERSION"
-                echo "Version with suffix: $VERSION"
-            }}}
+            }}
         }
         // What the pool has now, and what this build would do to it. Before the long part, because
         // an upload that silently changes nothing is worth knowing about before the build, not after
@@ -352,20 +408,20 @@ pipeline {
                     echo "Newest in the pool: ${versions.last()}"
                 }
 
-                boolean inPool = versions.contains(env.VERSION)
+                boolean inPool = versions.contains(env.PKG_VERSION)
                 if (!inPool && params.UPLOAD_TO_POOL) {
-                    echo "${env.VERSION} is not there: this build adds it"
+                    echo "${env.PKG_VERSION} is not there: this build adds it"
                 } else if (!inPool) {
-                    echo "${env.VERSION} is not there, and this build does not upload"
+                    echo "${env.PKG_VERSION} is not there, and this build does not upload"
                 } else if (!params.UPLOAD_TO_POOL) {
-                    echo "${env.VERSION} is already there; this build does not upload, so it stays as it is"
+                    echo "${env.PKG_VERSION} is already there; this build does not upload, so it stays as it is"
                 } else if (params.FORCE_OVERWRITE) {
-                    echo "${env.VERSION} is already there and FORCE_OVERWRITE is on: " +
+                    echo "${env.PKG_VERSION} is already there and FORCE_OVERWRITE is on: " +
                          "this build replaces the package in the pool"
                 } else {
-                    error("${env.VERSION} is already in the pool of ${repo.name}. wbci-repo keeps the " +
+                    error("${env.PKG_VERSION} is already in the pool of ${repo.name}. wbci-repo keeps the " +
                           "package it already has and skips the new one, so this build would upload " +
-                          "nothing: bump WB_REVISION, or set FORCE_OVERWRITE to replace it.")
+                          "nothing: add an entry to debian/changelog, or set FORCE_OVERWRITE to replace it.")
                 }
             }}
         }
