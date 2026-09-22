@@ -60,7 +60,7 @@ working after that change without anyone remembering this script.
 
 A copy is not an archive: it is a directory with the files as they were, copied with `cp -a`.
 Only the files that lie in `data` itself are taken, so `log` does not travel; `wb-backup-info.txt`
-is written by the script and names the version that was installed before that run:
+is written by the script and says when the copy was made and what was installed before:
 
 ```
 /var/backups/zigbee2mqtt/2026-09-23T14-05-01/
@@ -70,6 +70,32 @@ is written by the script and names the version that was installed before that ru
     state.json
     wb-backup-info.txt
 ```
+
+The words in `wb-backup-info.txt` are kept plain, because it is read on a controller by whoever is
+looking for the lost configuration:
+
+```
+date: 2026-09-23 14:05:01
+action: upgrade
+package: zigbee2mqtt
+old version: 2.14.1-wb101
+copy of: /mnt/data/root/zigbee2mqtt/data
+put back: stop zigbee2mqtt, copy the files that lie next to this one into the directory above, start zigbee2mqtt
+```
+
+`action` has three values, and they are all a maintainer script can tell apart:
+
+| action | what it was | old version |
+|---|---|---|
+| `upgrade` | dpkg was replacing the package that was installed | the version being replaced |
+| `install after remove` | the package had been removed, its settings stayed, now it is back | the version it had then |
+| `install` | dpkg knew no package of that name | `none` |
+
+A reinstall of the same version says `upgrade` too: the version being installed is not among the
+things dpkg hands to a maintainer script, so there is nothing here to tell the two apart, and
+there is no `new version` line for the same reason. `old version` comes from the argument fpm
+passes to `before_upgrade`, and `dpkg-query` is the fallback. `package` is the name the package
+really has: with `VERSION_TO_NAME` it is `zigbee2mqtt-1.18.1` and not `zigbee2mqtt`.
 
 To put such a copy back, with the service stopped:
 

@@ -201,6 +201,9 @@ test_data_copied_to_var_backups() {
     check "an install leaves one more copy" "$((before + 1))" "$(copies_in "${backups}")"
     check "the configuration is in it"      "yes" \
           "$(yes_no grep -rq 'wb-backup-marker' "${backups}")"
+    # The copy has to say what it was made before, with the version dpkg was replacing
+    check "the copy names the old version" "yes" \
+          "$(yes_no grep -rq "old version: $(deb_field Version)" "${backups}")"
 
     apt-get install -y --reinstall "${DEB}" > /tmp/backup-install.log 2>&1 ||
         apt_errors /tmp/backup-install.log
