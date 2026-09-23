@@ -228,7 +228,8 @@ pipeline {
         timeout(time: 2, unit: 'HOURS')
         // TODO: two builds of the same target on one agent use the same wbdev rootfs and break
         // each other. Builds of different targets are fine, but for now all of them have to wait
-        disableConcurrentBuilds()
+        // TEMPORARY: lifted while the Concurrency probe measures what two runs really share
+        // disableConcurrentBuilds()
     }
     parameters {
         // Not an input: a note in the form, as in wb-nodejs-packaging
@@ -469,6 +470,14 @@ pipeline {
                     docker ps --format '{{.Names}}	{{.Image}}' || true
                     echo "=== 3. locking inside wbdev itself"
                     grep -cE 'flock|lockfile' "$(command -v wbdev)" || true
+                    echo "=== 3a. this workspace"
+                    ls -la "${WORKSPACE}" | head -20
+                    echo "=== 3b. the directory the workspaces live in"
+                    ls -la "$(dirname "${WORKSPACE}")"
+                    echo "=== 3c. what the devenv containers mount from the agent"
+                    docker ps -q | while read -r c; do
+                        docker inspect --format '{{.Name}} {{range .Mounts}}{{.Source}} -> {{.Destination}} ; {{end}}' "$c"
+                    done || true
                     wbdev chroot sh -c '
                         tag=$1
                         echo "=== 4. marker of this build in the rootfs"
