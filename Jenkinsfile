@@ -226,7 +226,8 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '30', artifactNumToKeepStr: '30'))
         // A build takes 10 to 15 minutes; anything past two hours is stuck, usually in qemu
         timeout(time: 2, unit: 'HOURS')
-        // Two runs share the workspace of the job, and the second one would clean the tree of the first
+        // TODO: two builds of the same target on one agent use the same wbdev rootfs and break
+        // each other. Builds of different targets are fine, but for now all of them have to wait
         disableConcurrentBuilds()
     }
     parameters {
