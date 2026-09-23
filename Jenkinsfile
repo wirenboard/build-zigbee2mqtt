@@ -230,6 +230,10 @@ pipeline {
         disableConcurrentBuilds()
     }
     parameters {
+        // Not an input: a note in the form, as in wb-nodejs-packaging
+        choice(name: 'PACKAGE_VERSION', choices: ['set in debian/changelog, not here'],
+                description: '''The top entry of debian/changelog on this branch names both the zigbee2mqtt tag to build and the Wiren Board revision. To build another version, add an entry there in a branch: Jenkins-guide.md, "Общие сведения"''')
+
         string(name: 'REPO', defaultValue: 'https://github.com/Koenkk/zigbee2mqtt', description: 'Repo to get zigbee2mqtt from')
         string(name: 'BRANCH', defaultValue: 'master', description: 'For checkout step')
         booleanParam(name: 'VERSION_TO_NAME', defaultValue: false, description: 'Adds version number to package name as suffix, creating names like zigbee2mqtt-1.18.1')
@@ -276,6 +280,17 @@ pipeline {
     stages {
         stage('Initialize build') { steps {
             script {
+                // A build started with the parameters of the old job, by a saved trigger or by
+                // "Rebuild", would carry a version nobody reads any more
+                if (params.PACKAGE_VERSION && !params.PACKAGE_VERSION.contains('debian/changelog')) {
+                    error("PACKAGE_VERSION='${params.PACKAGE_VERSION}': the version is not a parameter, it is the top entry " +
+                          "of debian/changelog on this branch (${baseVersion()}). See Jenkins-guide.md.")
+                }
+                if (params.TAG || params.WB_REVISION) {
+                    error("TAG and WB_REVISION are gone: the tag to build and the revision both come from the top entry " +
+                          "of debian/changelog on this branch (${baseVersion()}). See Jenkins-guide.md.")
+                }
+
                 // These values go into shell command lines: allow only what they legitimately contain
                 def formats = [
                     WBDEV_IMAGE:  /^[A-Za-z0-9._\/:@-]*$/,

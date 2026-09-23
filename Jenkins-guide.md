@@ -5,6 +5,11 @@ Pipeline, описанный в файле [Jenkinsfile](Jenkinsfile), соби�
 
 ## Общие сведения
 
+В форме запуска сверху висит поле `PACKAGE_VERSION` с единственным вариантом\
+`set in debian/changelog, not here`. Это не параметр, а напоминание: ввести версию\
+в джобе нельзя. Если сборку запустили со старыми параметрами `TAG` или `WB_REVISION`,\
+она останавливается на Initialize build и говорит, где теперь живёт версия.
+
 Версия пакета берётся из верхней записи [debian/changelog](debian/changelog), как в\
 wb-nodejs-packaging: `zigbee2mqtt (2.14.1-wb102)` собирает тег `2.14.1` из\
 [Koenkk/zigbee2mqtt](https://github.com/Koenkk/zigbee2mqtt) в пакет `2.14.1-wb102`.\
