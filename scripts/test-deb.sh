@@ -159,10 +159,12 @@ test_control_fields() {
 }
 
 # The Jenkinsfile writes the version of a branch build into debian/changelog, and fpm packs that
-# file: the entry on top has to name the version the package carries, or one of the two is stale
+# file: the entry on top has to name the version the package carries, or one of the two is stale.
+# fpm names it changelog.gz, while the Debian policy name for a non-native package is
+# changelog.Debian.gz, so the pattern covers both
 test_changelog_matches_version() {
     top=$(dpkg-deb --fsys-tarfile "${DEB}" |
-          tar -xOf - --wildcards "*usr/share/doc/$(deb_field Package)/changelog.Debian.gz" 2>/dev/null |
+          tar -xOf - --wildcards "*usr/share/doc/$(deb_field Package)/changelog*.gz" 2>/dev/null |
           gzip -dc 2>/dev/null | head -n 1)
     check "the version on top of the packaged changelog" "$(deb_field Version)" \
           "$(sed -n 's/^[^ ]* (\([^)]*\)).*/\1/p' <<<"${top}")"
