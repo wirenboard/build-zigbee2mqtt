@@ -454,6 +454,38 @@ pipeline {
                 }
             }}
         }
+        // TEMPORARY, reverted once the numbers are in: shows what two builds running at the same
+        // time really share. Five independent answers in one run, so nothing has to be rerun later:
+        // the agent and the workspace, the devenv containers, a marker file inside the rootfs, the
+        // path the rootfs is mounted from, and the dpkg lock, held for a minute so that a build
+        // started within that minute is guaranteed to overlap with this one
+        stage('Concurrency probe') {
+            when { expression { fullRun() } }
+            steps {
+                sh '''
+                    echo "=== 1. agent=${NODE_NAME} workspace=${WORKSPACE} target=${WBDEV_TARGET}"
+                    echo "=== 1. build=${BUILD_TAG} started the probe at $(date -u +%H:%M:%S) UTC"
+                    echo "=== 2. containers on this agent"
+                    docker ps --format '{{.Names}}	{{.Image}}' || true
+                    echo "=== 3. locking inside wbdev itself"
+                    grep -cE 'flock|lockfile' "$(command -v wbdev)" || true
+                    wbdev chroot sh -c '
+                        tag=$1
+                        echo "=== 4. marker of this build in the rootfs"
+                        echo "${tag}" > "/tmp/probe-${tag}"
+                        ls -1 /tmp/probe-*
+                        echo "=== 5. the rootfs is mounted from"
+                        head -3 /proc/self/mountinfo
+                        echo "=== 6. the dpkg lock, taken for a minute"
+                        flock -n /var/lib/dpkg/lock-frontend -c "echo took it; sleep 60; echo released" ||
+                            echo "COULD NOT take the dpkg lock: another build holds it"
+                        echo "=== 7. markers at the end, $(date -u +%H:%M:%S) UTC"
+                        ls -1 /tmp/probe-*
+                    ' probe "${BUILD_TAG}"
+                '''
+            }
+        }
+
         stage('Build') {
             when { expression { fullRun() } }
             steps { script {
