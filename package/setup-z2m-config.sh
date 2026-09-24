@@ -78,7 +78,7 @@ get_slots_with_zigbee_module() {
 set_port_from_slot() {
     case "$1" in
         [1-4]) ;;
-        *) log "the controller settings name slot $1, a controller has 1 to 4," \
+        *) log "${WB_HARDWARE_CONFIG_PATH} names slot $1, a controller has 1 to 4," \
                "serial.port left as $2"
            return 0 ;;
     esac
@@ -91,12 +91,13 @@ set_port_from_slot() {
     case "$2" in
         ""|/dev/ttyMOD[0-9]) ;;
         *) log "serial.port left as $2, not a slot of this controller;" \
-               "the settings point to ${port}"
+               "${WB_HARDWARE_CONFIG_PATH} points to ${port}"
            return 0 ;;
     esac
 
     write_serial_port "${Z2M_CONFIG_PATH}" "${port}" &&
-        log "serial.port set to ${port}, the Zigbee module slot from the controller settings"
+        log "serial.port set to ${port}, the Zigbee module slot from" \
+            "${WB_HARDWARE_CONFIG_PATH}, picked in the web interface"
 }
 
 main() {
@@ -107,10 +108,11 @@ main() {
     current_port=$(read_serial_port "${Z2M_CONFIG_PATH}")
     # grep prints 0 when it matches nothing, so the count is right even for an empty list
     case "$(printf '%s\n' "${slots}" | grep -c '[0-9]')" in
-        0) log "no Zigbee module in the controller settings, serial.port left as ${current_port}" ;;
+        0) log "no Zigbee module in ${WB_HARDWARE_CONFIG_PATH}, where the web interface" \
+               "writes the slot, serial.port left as ${current_port}" ;;
         1) set_port_from_slot "${slots}" "${current_port}" ;;
         # The unquoted expansion turns the lines into a list for the message
-        *) log "several Zigbee modules in the controller settings (slots" \
+        *) log "several Zigbee modules in ${WB_HARDWARE_CONFIG_PATH} (slots" \
                "$(echo ${slots} | tr ' ' ',')), serial.port left as ${current_port}" ;;
     esac
     exit 0

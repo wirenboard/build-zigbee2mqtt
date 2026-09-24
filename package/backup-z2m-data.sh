@@ -88,7 +88,8 @@ rotate_backups() {
     # "tail -n +N" starts printing at line N, so the copies to keep are the lines before it
     ls -1dt "${Z2M_BACKUP_PATH}"/*/ 2>/dev/null | tail -n +$((Z2M_BACKUPS_TO_KEEP + 1)) |
         while read -r older_copy; do
-            backup_log "keeping ${Z2M_BACKUPS_TO_KEEP} newest backups, removing ${older_copy}"
+            backup_log "deleting the old backup ${older_copy}," \
+                       "only the last ${Z2M_BACKUPS_TO_KEEP} stay"
             rm -rf "${older_copy}"
         done
 }
@@ -105,7 +106,7 @@ backup_z2m_data() {
     partial_path="${backup_path}.partial"
 
     if ! copy_data_files "${partial_path}"; then
-        backup_warn "warning: could not back up the data, the install goes on without a backup"
+        backup_warn "warning: could not make a backup, the install continues without one"
         rm -rf "${partial_path}"
         return 0
     fi
@@ -119,10 +120,12 @@ backup_z2m_data() {
     if write_backup_info "${partial_path}" "${name}" "${what}" "${version}" &&
        mv "${partial_path}" "${backup_path}"
     then
-        backup_log "backup before ${what}: ${backup_path}, ${files} files"
+        backup_log "backup before ${what}: the current configuration and devices from" \
+                   "${Z2M_DATA_PATH}" \
+                   "to ${backup_path}, ${files} files"
         rotate_backups
     else
-        backup_warn "warning: could not finish the backup, it is removed and the install goes on"
+        backup_warn "warning: could not finish the backup, it is deleted and the install continues"
         rm -rf "${partial_path}"
     fi
     return 0
