@@ -483,10 +483,12 @@ pipeline {
                         echo "=== 4. marker of this build in the rootfs"
                         echo "${tag}" > "/tmp/probe-${tag}"
                         ls -1 /tmp/probe-*
-                        echo "=== 5. the rootfs is mounted from"
-                        head -3 /proc/self/mountinfo
-                        echo "=== 6. the dpkg lock, taken for a minute"
-                        flock -n /var/lib/dpkg/lock-frontend -c "echo took it; sleep 60; echo released" ||
+                        echo "=== 5. the rootfs: its root mount, its device and inode, its age"
+                        grep -E "^[0-9]+ [0-9]+ [0-9]+:[0-9]+ [^ ]+ / " /proc/self/mountinfo
+                        stat -c "device %d inode %i" /
+                        ls -ld / /tmp /var/lib/dpkg
+                        echo "=== 6. the dpkg lock, taken for three minutes"
+                        flock -n /var/lib/dpkg/lock-frontend -c "echo took it; sleep 180; echo released" ||
                             echo "COULD NOT take the dpkg lock: another build holds it"
                         echo "=== 7. markers at the end, $(date -u +%H:%M:%S) UTC"
                         ls -1 /tmp/probe-*
