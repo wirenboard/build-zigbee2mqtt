@@ -245,6 +245,14 @@ Node.js in the rootfs for this build: installed version and the repository it ca
 - `devenv` - по умолчанию: `build-node-1-vm` и `build-node-2-vm`
 - `heavy-duty` - `build-powerhouse-vm`
 
+Несколько сборок можно запускать одновременно, в том числе одной цели: каждая получает\
+свой rootfs и свой рабочий каталог, помешать друг другу они не могут. Проверено опытом,\
+подробности в `docs/jenkins-job-rationale.md` репозитория `wb-nodejs-packaging`.
+
+Когда нужен результат быстрее, берите `heavy-duty`: сборка armhf там занимает около\
+7 минут в одиночку и около 10, если рядом идёт вторая, а на `devenv` те же две сборки\
+идут по 28 минут. Выбор машины влияет на время сильнее, чем соседние сборки.
+
 Примечание про метку `devenv-legacy`. С 26.06.2024\
 ([#11](https://github.com/wirenboard/build-zigbee2mqtt/pull/11)) в Jenkinsfile\
 жёстко стояло `label 'devenv-legacy'`: z2m 1.18 не собирался на `devenv`, а на\

@@ -226,9 +226,6 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '30', artifactNumToKeepStr: '30'))
         // A build takes 10 to 15 minutes; anything past two hours is stuck, usually in qemu
         timeout(time: 2, unit: 'HOURS')
-        // TODO: two builds of the same target on one agent use the same wbdev rootfs and break
-        // each other. Builds of different targets are fine, but for now all of them have to wait
-        disableConcurrentBuilds()
     }
     parameters {
         // Not an input: a note in the form, as in wb-nodejs-packaging
