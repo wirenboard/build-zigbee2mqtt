@@ -89,20 +89,28 @@ set_port_in_z2m_config() {
         log "serial.port set to ${port}, the Zigbee module slot from the controller settings"
 }
 
+# port_note <port>: the port, and whether it is still the one from the template
+port_note() {
+    if [ "$1" = "$(read_port_from_file "${Z2M_CONFIG_TEMPLATE_PATH}")" ]; then
+        echo "the default $1"
+    else
+        echo "$1"
+    fi
+}
+
 main() {
     create_z2m_config_if_missing
     [ -e "${Z2M_CONFIG_PATH}" ] || exit 0
 
     slots=$(get_slots_with_zigbee_module)
+    current_port=$(port_note "$(read_port_from_file "${Z2M_CONFIG_PATH}")")
     # grep prints 0 when it matches nothing, so the count is right even for an empty list
     case "$(printf '%s\n' "${slots}" | grep -c '[0-9]')" in
-        0) log "no Zigbee module in the controller settings, serial.port left as" \
-               "$(read_port_from_file "${Z2M_CONFIG_PATH}")" ;;
+        0) log "no Zigbee module in the controller settings, serial.port left as ${current_port}" ;;
         1) set_port_in_z2m_config "/dev/ttyMOD${slots}" ;;
         # The unquoted expansion turns the lines into a list for the message
         *) log "several Zigbee modules in the controller settings (slots" \
-               "$(echo ${slots} | tr ' ' ',')), serial.port left as" \
-               "$(read_port_from_file "${Z2M_CONFIG_PATH}")" ;;
+               "$(echo ${slots} | tr ' ' ',')), serial.port left as ${current_port}" ;;
     esac
     exit 0
 }
