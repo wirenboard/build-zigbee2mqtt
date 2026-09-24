@@ -1,23 +1,25 @@
 #!/bin/sh
-# Copies the data of zigbee2mqtt into /var/backups before dpkg installs or upgrades it: proof
-# that the move of configuration.yaml off dpkg conffiles loses nothing on real controllers.
+# Copies the data of zigbee2mqtt into /var/backups before dpkg installs or upgrades it: it shows
+# that configuration.yaml can stop being a dpkg conffile without anyone losing data.
 # TEMPORARY: after 2027-01 remove the backup step: this file and the fpm flags that inline it.
-# fpm inlines it into a maintainer script function: no exit here, return only inside the function.
+# fpm inlines it into a maintainer script function: nothing here may call exit, and return works
+# only inside backup_z2m_data().
 
 Z2M_DATA_PATH=/mnt/data/root/zigbee2mqtt/data
 Z2M_BACKUP_PATH=/var/backups/zigbee2mqtt
-# A user upgrades, something breaks, they try once more and only then start looking, so three
-# copies are enough and anything older helps nobody
+# Three copies are enough: a user upgrades, something breaks, they upgrade once more, and only
+# then look for a copy
 Z2M_BACKUPS_TO_KEEP=3
 
-# The lines land in the apt log among everyone else's, so they name the writer. The names
-# carry a prefix: this file is inlined into a maintainer script shared with other code
+# Every line goes into the apt log next to lines from other packages, so it starts with the
+# package name. The function names start with backup_ because this file is inlined into a
+# maintainer script shared with other code
 backup_log() { echo "zigbee2mqtt: $*"; }
 backup_warn() { echo "zigbee2mqtt: $*" >&2; }
 
-# free_backup_path: a name of the form <date>T<time> that no copy occupies yet. Two runs inside
+# new_backup_path: a name of the form <date>T<time> that no copy occupies yet. Two runs inside
 # one second would otherwise share a directory
-free_backup_path() {
+new_backup_path() {
     local path attempt
     path="${Z2M_BACKUP_PATH}/$(date +%Y-%m-%dT%H-%M-%S)"
     attempt=1
@@ -28,9 +30,9 @@ free_backup_path() {
     echo "${path}"
 }
 
-# copy_data_files <directory>: the files of the data directory, "log" is of no use in a copy.
-# "+" and not "\;": with ";" find returns 0 even when cp failed, and the target then goes
-# into "-t", because "{}" has to be last
+# copy_data_files <directory>: copies the files of the data directory, without "log", which is
+# of no use in a copy. The form "-exec ... +" is required: with "-exec ... \;" find returns 0 even
+# when cp failed. With "+" the target goes into "-t", because "{}" must be the last argument
 copy_data_files() {
     mkdir -p "$1" &&
         find "${Z2M_DATA_PATH}" -maxdepth 1 -type f -exec cp -a -t "$1" {} +
@@ -39,7 +41,7 @@ copy_data_files() {
 # package_name: the name this package really has, with VERSION_TO_NAME it is zigbee2mqtt-1.18.1
 package_name() { echo "${DPKG_MAINTSCRIPT_PACKAGE:-zigbee2mqtt}"; }
 
-# old_version <package> <version fpm passed>: empty when dpkg knows no package of that name
+# old_version <package> <version passed by fpm>: empty when dpkg knows no package of that name
 old_version() {
     if [ -n "$2" ]; then
         echo "$2"
@@ -48,8 +50,8 @@ old_version() {
     fi
 }
 
-# made_before <package> <old version>: what dpkg is about to do, as wb-backup-info.txt says it
-made_before() {
+# dpkg_action <package> <old version>: what dpkg is about to do, as wb-backup-info.txt says it
+dpkg_action() {
     if [ -z "$2" ]; then
         echo "install"
     elif dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q config-files; then
@@ -59,7 +61,7 @@ made_before() {
     fi
 }
 
-# write_backup_info <directory> <package> <made before> <old version>
+# write_backup_info <directory> <package> <dpkg action> <old version>
 write_backup_info() {
     {
         echo "# Written automatically by the zigbee2mqtt package, before dpkg changed anything."
@@ -70,14 +72,14 @@ write_backup_info() {
         echo "package: $2"
         echo "old version: ${4:-none}"
         echo "copy of: ${Z2M_DATA_PATH}"
-        echo "put back: stop zigbee2mqtt, copy the files that lie next to this one into the" \
-             "directory above, start zigbee2mqtt"
+        echo "put back: stop zigbee2mqtt, copy the files from this directory into the directory" \
+             "above, start zigbee2mqtt"
     } > "$1/wb-backup-info.txt"
 }
 
-# remove_stale_partials: a copy interrupted by a power cut leaves a ".partial" behind, and
+# remove_unfinished_copies: a copy interrupted by a power cut leaves a ".partial" behind, and
 # nothing else ever removes it, while rotation counts it as a copy
-remove_stale_partials() {
+remove_unfinished_copies() {
     local stale
     for stale in "${Z2M_BACKUP_PATH}"/*.partial; do
         [ -d "${stale}" ] || continue
@@ -88,7 +90,7 @@ remove_stale_partials() {
 
 # rotate_backups: keeps the Z2M_BACKUPS_TO_KEEP newest copies and removes the rest. "ls -t"
 # sorts by time and not by name on purpose: a name with a suffix, "...-05-18-2", sorts before
-# "...-05-18", so by name the newest copy would be the one to go
+# "...-05-18", so sorting by name would delete the newest copy
 rotate_backups() {
     local older_copy
     # "tail -n +N" starts printing at line N, so the copies to keep are the lines before it
@@ -106,8 +108,8 @@ backup_z2m_data() {
         return 0
     fi
 
-    remove_stale_partials
-    backup_path=$(free_backup_path)
+    remove_unfinished_copies
+    backup_path=$(new_backup_path)
     partial_path="${backup_path}.partial"
 
     if ! copy_data_files "${partial_path}"; then
@@ -118,9 +120,9 @@ backup_z2m_data() {
 
     name=$(package_name)
     version=$(old_version "${name}" "${1:-}")
-    what=$(made_before "${name}" "${version}")
-    # The note and the rename are one condition: a note that did not fit on the disk means the
-    # copy next to it is not to be trusted either
+    what=$(dpkg_action "${name}" "${version}")
+    # The note is written and the directory is renamed in one condition: if the note did not fit
+    # on the disk, the copy next to it cannot be trusted either
     if write_backup_info "${partial_path}" "${name}" "${what}" "${version}" &&
        mv "${partial_path}" "${backup_path}"
     then
