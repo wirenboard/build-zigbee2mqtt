@@ -152,8 +152,7 @@ before_upgrade_with_backup() {
 }
 
 # "data/configuration.yaml" is excluded on purpose: the package ships a template instead, and
-# setup-z2m-config.sh creates the file on the controller when there is none. Why:
-# README.md, "The configuration on the controller"
+# setup-z2m-config.sh creates the file on the controller when there is none
 pack_deb_with_fpm() {
     local dependency=$1
     local before_upgrade="${RESULT_DIR}/.before-upgrade-with-backup.sh"

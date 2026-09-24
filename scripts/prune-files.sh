@@ -5,8 +5,6 @@
 #   tree     the built zigbee2mqtt: the directory with dist, node_modules and package.json
 # Runs on the build agent, never on a controller.
 # Exit: 0 done, 1 no such tree or a failed check, 2 usage
-#
-# What is removed, what is kept and why: README.md, "Files the package does not carry"
 
 set -euo pipefail
 

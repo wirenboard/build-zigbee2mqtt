@@ -1,6 +1,6 @@
 #!/bin/sh
 # Creates the zigbee2mqtt configuration from the template when the controller has none, and fills
-# in the serial port from the slot picked in the web interface. Details are in the README.
+# in the serial port from the slot picked in the web interface.
 # Usage: setup-z2m-config.sh
 # Exit:  always 0, neither the maintainer scripts nor the service may fail because of it
 set -u

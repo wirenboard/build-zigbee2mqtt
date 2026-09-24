@@ -1,6 +1,6 @@
 #!/bin/sh
-# Runs on the controller after an upgrade unpacked the new package. fpm inlines it: README.md,
-# "The maintainer scripts"
+# Runs on the controller after an upgrade unpacked the new package. fpm inlines it into a
+# maintainer script function, where a failing command does not stop the upgrade
 
 CONFIG_FILE=/mnt/data/root/zigbee2mqtt/data/configuration.yaml
 

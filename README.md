@@ -41,7 +41,10 @@ Licence texts stay everywhere: they have to travel with the code.
 Copy of the data before an install
 ----------------------------------
 
-**This is temporary.** `package/backup-z2m-data.sh` copies `/mnt/data/root/zigbee2mqtt/data` into
+**This is temporary and can go after January 2027.** It guards one change: `configuration.yaml`
+is no longer a dpkg conffile, the package ships a template and the file is created on the
+controller. The copies are how we tell that controllers went through that change without losing
+their configuration. `package/backup-z2m-data.sh` copies `/mnt/data/root/zigbee2mqtt/data` into
 `/var/backups/zigbee2mqtt/<date>T<time>` before every install and every upgrade, and keeps the
 three newest copies.
 
@@ -75,17 +78,20 @@ The words in `wb-backup-info.txt` are kept plain, because it is read on a contro
 looking for the lost configuration:
 
 ```
-date: 2026-09-23 14:05:01
-action: upgrade
+# Written automatically by the zigbee2mqtt package, before dpkg changed anything.
+# For whoever is looking for a configuration that went missing.
+
+backup time: 2026-09-23 14:05:01 +0300 (MSK)
+made before dpkg action: upgrade
 package: zigbee2mqtt
 old version: 2.14.1-wb101
 copy of: /mnt/data/root/zigbee2mqtt/data
 put back: stop zigbee2mqtt, copy the files that lie next to this one into the directory above, start zigbee2mqtt
 ```
 
-`action` has three values, and they are all a maintainer script can tell apart:
+`made before dpkg action` has three values, and they are all a maintainer script can tell apart:
 
-| action | what it was | old version |
+| dpkg action | what it was | old version |
 |---|---|---|
 | `upgrade` | dpkg was replacing the package that was installed | the version being replaced |
 | `install after remove` | the package had been removed, its settings stayed, now it is back | the version it had then |
@@ -96,6 +102,19 @@ things dpkg hands to a maintainer script, so there is nothing here to tell the t
 there is no `new version` line for the same reason. `old version` comes from the argument fpm
 passes to `before_upgrade`, and `dpkg-query` is the fallback. `package` is the name the package
 really has: with `VERSION_TO_NAME` it is `zigbee2mqtt-1.18.1` and not `zigbee2mqtt`.
+
+A copy that did not work out leaves nothing behind. The files go into `<date>T<time>.partial`,
+and the directory gets its real name only after the last file and
+`wb-backup-info.txt` are in place. The rename happens inside one directory, so it costs no space
+and no time, and both the rotation above and a person looking into `/var/backups` see whole copies
+only. When anything fails, the script says so on stderr and removes the `.partial` directory.
+
+This is not a theoretical worry. The copy used to be made with `find ... -exec cp -a {} ... \;`,
+and with `;` find returns 0 even when `cp` failed. Measured on a controller with GNU findutils
+4.10 and 16 KB of free space: `cp` filled the disk, `find` returned 0, the script reported the
+copy as made, and `/var/backups` got a directory of empty files that took one of the three slots.
+Three such upgrades in a row would have left no whole copy at all. Hence `-exec ... +`, which does
+return a non-zero status, and hence the `.partial` name.
 
 To put such a copy back, with the service stopped:
 
