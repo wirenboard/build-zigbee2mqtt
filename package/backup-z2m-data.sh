@@ -41,21 +41,12 @@ copy_data_files() {
 # package_name: the name this package really has, with VERSION_TO_NAME it is zigbee2mqtt-1.18.1
 package_name() { echo "${DPKG_MAINTSCRIPT_PACKAGE:-zigbee2mqtt}"; }
 
-# old_version <package> <version passed by fpm>: empty when dpkg knows no package of that name
-old_version() {
-    if [ -n "$2" ]; then
-        echo "$2"
-    else
-        dpkg-query -W -f='${Version}' "$1" 2>/dev/null
-    fi
-}
-
-# dpkg_action <package> <old version>: what dpkg is about to do, as wb-backup-info.txt says it
+# dpkg_action <version passed by fpm>: fpm calls this file without arguments before a fresh
+# install and with the version being replaced before an upgrade. dpkg itself cannot be asked
+# here: it has already written the record of the version being installed
 dpkg_action() {
-    if [ -z "$2" ]; then
+    if [ -z "$1" ]; then
         echo "install"
-    elif dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q config-files; then
-        echo "install after remove"
     else
         echo "upgrade"
     fi
@@ -119,8 +110,8 @@ backup_z2m_data() {
     fi
 
     name=$(package_name)
-    version=$(old_version "${name}" "${1:-}")
-    what=$(dpkg_action "${name}" "${version}")
+    version=${1:-}
+    what=$(dpkg_action "${version}")
     # The note is written and the directory is renamed in one condition: if the note did not fit
     # on the disk, the copy next to it cannot be trusted either
     if write_backup_info "${partial_path}" "${name}" "${what}" "${version}" &&

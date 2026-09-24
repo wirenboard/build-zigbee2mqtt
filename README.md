@@ -48,6 +48,19 @@ their configuration. `package/backup-z2m-data.sh` copies `/mnt/data/root/zigbee2
 `/var/backups/zigbee2mqtt/<date>T<time>` before every install and every upgrade, and keeps the
 three newest copies.
 
+A copy is made:
+
+- **before an install**, because dpkg may be putting the package onto a controller where the data
+  of an earlier installation is still there;
+- **before an upgrade**, because this is the run that can leave the tree without its `data`.
+
+No copy is made:
+
+- **on remove**, because dpkg does not touch `/mnt/data` and the data stays where it is;
+- **on purge**, because the package does not wipe the data either, at least while
+  `--deb-after-purge` is not in `scripts/build.sh`;
+- **at any other moment**, because the copies are tied to dpkg runs and no timer makes them.
+
 The reason is a real case: an upgrade stopped half way, the tree of the application was left
 without `data`, and the configuration went with it, network key and paired devices included. Until
 such a run is impossible, every install leaves a copy behind, and a week later the answer to "my
@@ -89,19 +102,22 @@ copy of: /mnt/data/root/zigbee2mqtt/data
 put back: stop zigbee2mqtt, copy the files that lie next to this one into the directory above, start zigbee2mqtt
 ```
 
-`made before dpkg action` has three values, and they are all a maintainer script can tell apart:
+`made before dpkg action` has two values, and they come from fpm, which calls the file without
+arguments before a fresh install and with the version being replaced before an upgrade:
 
 | dpkg action | what it was | old version |
 |---|---|---|
 | `upgrade` | dpkg was replacing the package that was installed | the version being replaced |
-| `install after remove` | the package had been removed, its settings stayed, now it is back | the version it had then |
-| `install` | dpkg knew no package of that name | `none` |
+| `install` | there was no package of that name | `none` |
+
+dpkg itself cannot be asked about the version here: by the time `preinst` runs, it has already
+written the record of the version being installed, so a question about "the installed version"
+comes back with the new one.
 
 A reinstall of the same version says `upgrade` too: the version being installed is not among the
 things dpkg hands to a maintainer script, so there is nothing here to tell the two apart, and
-there is no `new version` line for the same reason. `old version` comes from the argument fpm
-passes to `before_upgrade`, and `dpkg-query` is the fallback. `package` is the name the package
-really has: with `VERSION_TO_NAME` it is `zigbee2mqtt-1.18.1` and not `zigbee2mqtt`.
+there is no `new version` line for the same reason. `package` is the name the package really has:
+with `VERSION_TO_NAME` it is `zigbee2mqtt-1.18.1` and not `zigbee2mqtt`.
 
 A copy that did not work out leaves nothing behind. The files go into `<date>T<time>.partial`,
 and the directory gets its real name only after the last file and
