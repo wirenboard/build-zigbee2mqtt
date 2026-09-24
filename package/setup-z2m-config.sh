@@ -1,6 +1,7 @@
 #!/bin/sh
-# Creates the zigbee2mqtt configuration from the template when the controller has none, and fills
-# in the serial port from the slot picked in the web interface.
+# Creates the zigbee2mqtt configuration from the template when the controller has none, and sets
+# the serial port from the slot picked in the web interface. The template carries /dev/ttyMOD0,
+# a slot no controller has, so a port nobody has set is visible as such.
 # Usage: setup-z2m-config.sh
 # Exit:  always 0, neither the maintainer scripts nor the service may fail because of it
 set -u
@@ -31,18 +32,18 @@ create_z2m_config_if_missing() {
     fi
 }
 
-# read_port_from_file <path>: the port out of the serial: block, and out of that block only,
+# read_serial_port <path>: the port out of the serial: block, and out of that block only,
 # because a configuration may well carry a frontend: port too. Earlier packages wrote the file
 # with CRLF, hence the sub()
-read_port_from_file() {
+read_serial_port() {
     awk '
         /^[^[:space:]#]/           { in_serial = ($0 ~ /^serial:/) }
         in_serial && $1 == "port:" { sub(/\r$/, "", $2); print $2; exit }
     ' "$1" 2>/dev/null
 }
 
-# write_port_to_file <path> <port>: replaces the port in the serial: block, keeping the indentation
-write_port_to_file() {
+# write_serial_port <path> <port>: replaces the port in the serial: block, keeps the indentation
+write_serial_port() {
     config_path=$1
     new_path="${config_path}.wb-new"
     if awk -v port="$2" '
@@ -71,31 +72,31 @@ get_slots_with_zigbee_module() {
         sed -n 's/.*mod\([0-9][0-9]*\)$/\1/p'
 }
 
-# set_port_in_z2m_config <port>: writes the port into the zigbee2mqtt configuration unless it
-# already names another one. A port that differs from the one in the template counts as chosen
-# by a human, quoted values included
-set_port_in_z2m_config() {
-    port=$1
-    current_port=$(read_port_from_file "${Z2M_CONFIG_PATH}")
-    [ "${current_port}" = "${port}" ] && return 0
+# set_port_from_slot <slot> <port in the configuration>: the slot picked in the settings wins, so
+# a module moved to another slot is picked up on the next start of the service. A controller has
+# slots 1 to 4, anything else in the settings is a mistake and changes nothing
+set_port_from_slot() {
+    case "$1" in
+        [1-4]) ;;
+        *) log "the controller settings name slot $1, a controller has 1 to 4," \
+               "serial.port left as $2"
+           return 0 ;;
+    esac
 
-    template_port=$(read_port_from_file "${Z2M_CONFIG_TEMPLATE_PATH}")
-    if [ -n "${current_port}" ] && [ "${current_port}" != "${template_port}" ]; then
-        log "serial.port left as ${current_port}, the controller settings point to ${port}"
-        return 0
-    fi
+    port="/dev/ttyMOD$1"
+    [ "$2" = "${port}" ] && return 0
 
-    write_port_to_file "${Z2M_CONFIG_PATH}" "${port}" &&
+    # A port that is not a slot of this controller belongs to a USB stick or to a coordinator
+    # over the network. Whoever wrote it did not mean the module in the settings
+    case "$2" in
+        ""|/dev/ttyMOD[0-9]) ;;
+        *) log "serial.port left as $2, not a slot of this controller;" \
+               "the settings point to ${port}"
+           return 0 ;;
+    esac
+
+    write_serial_port "${Z2M_CONFIG_PATH}" "${port}" &&
         log "serial.port set to ${port}, the Zigbee module slot from the controller settings"
-}
-
-# port_note <port>: the port, and whether it is still the one from the template
-port_note() {
-    if [ "$1" = "$(read_port_from_file "${Z2M_CONFIG_TEMPLATE_PATH}")" ]; then
-        echo "the default $1"
-    else
-        echo "$1"
-    fi
 }
 
 main() {
@@ -103,11 +104,11 @@ main() {
     [ -e "${Z2M_CONFIG_PATH}" ] || exit 0
 
     slots=$(get_slots_with_zigbee_module)
-    current_port=$(port_note "$(read_port_from_file "${Z2M_CONFIG_PATH}")")
+    current_port=$(read_serial_port "${Z2M_CONFIG_PATH}")
     # grep prints 0 when it matches nothing, so the count is right even for an empty list
     case "$(printf '%s\n' "${slots}" | grep -c '[0-9]')" in
         0) log "no Zigbee module in the controller settings, serial.port left as ${current_port}" ;;
-        1) set_port_in_z2m_config "/dev/ttyMOD${slots}" ;;
+        1) set_port_from_slot "${slots}" "${current_port}" ;;
         # The unquoted expansion turns the lines into a list for the message
         *) log "several Zigbee modules in the controller settings (slots" \
                "$(echo ${slots} | tr ' ' ',')), serial.port left as ${current_port}" ;;
