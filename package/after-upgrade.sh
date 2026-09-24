@@ -8,7 +8,7 @@ CONFIG_FILE=/mnt/data/root/zigbee2mqtt/data/configuration.yaml
 # nothing is restored here. This creates it when there is none and fills in the serial port
 /usr/lib/zigbee2mqtt/setup-z2m-config.sh
 
-echo "Adding dependencies for pnpm"
+echo "zigbee2mqtt: adding dependencies for pnpm"
 # Dependencies already included in .deb — this just prevents runtime issues
 pnpm install --prod --frozen-lockfile --force --prefix /mnt/data/root/zigbee2mqtt
 
@@ -29,7 +29,7 @@ if [ -e "${CONFIG_FILE}" ] && ! grep -Pzq 'serial:\n(  .*\n)*  adapter: zstack' 
     else
         sed -i "/^serial:/a \  adapter: zstack" "${CONFIG_FILE}"
     fi
-    echo "zstack adapter type added to the configuration file"
+    echo "zigbee2mqtt: zstack adapter type added to the configuration"
 fi
 
 if [ -e "${CONFIG_FILE}" ] && ! grep -q '^availability:' "${CONFIG_FILE}"; then
@@ -41,5 +41,5 @@ availability:
     max_jitter: 30000
     backoff: true
 EOF
-    echo "availability section added to the configuration file"
+    echo "zigbee2mqtt: availability section added to the configuration"
 fi

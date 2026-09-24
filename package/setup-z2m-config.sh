@@ -18,7 +18,7 @@ log() { echo "zigbee2mqtt: $*"; }
 create_z2m_config_if_missing() {
     [ -e "${Z2M_CONFIG_PATH}" ] && return 0
     [ -e "${Z2M_CONFIG_TEMPLATE_PATH}" ] || {
-        log "no ${Z2M_CONFIG_TEMPLATE_PATH}, cannot create the configuration"
+        log "warning: no ${Z2M_CONFIG_TEMPLATE_PATH}, the configuration is not created"
         return 0
     }
 
@@ -27,7 +27,7 @@ create_z2m_config_if_missing() {
     then
         log "created ${Z2M_CONFIG_PATH} from the template"
     else
-        log "could not create ${Z2M_CONFIG_PATH} from the template"
+        log "warning: could not create ${Z2M_CONFIG_PATH} from the template"
     fi
 }
 
@@ -81,13 +81,12 @@ set_port_in_z2m_config() {
 
     template_port=$(read_port_from_file "${Z2M_CONFIG_TEMPLATE_PATH}")
     if [ -n "${current_port}" ] && [ "${current_port}" != "${template_port}" ]; then
-        log "serial.port is ${current_port} and not the ${port} of the selected slot;" \
-            "leaving the configured port alone"
+        log "serial.port left as ${current_port}, the controller settings point to ${port}"
         return 0
     fi
 
     write_port_to_file "${Z2M_CONFIG_PATH}" "${port}" &&
-        log "serial.port set to ${port}, the slot picked in the settings"
+        log "serial.port set to ${port}, the Zigbee module slot from the controller settings"
 }
 
 main() {
@@ -97,13 +96,13 @@ main() {
     slots=$(get_slots_with_zigbee_module)
     # grep prints 0 when it matches nothing, so the count is right even for an empty list
     case "$(printf '%s\n' "${slots}" | grep -c '[0-9]')" in
-        0) log "no Zigbee module is selected in the controller settings; pick the slot there," \
-               "or set serial.port in ${Z2M_CONFIG_PATH} by hand" ;;
+        0) log "no Zigbee module in the controller settings, serial.port left as" \
+               "$(read_port_from_file "${Z2M_CONFIG_PATH}")" ;;
         1) set_port_in_z2m_config "/dev/ttyMOD${slots}" ;;
         # The unquoted expansion turns the lines into a list for the message
-        *) log "several Zigbee modules are selected (slots $(echo ${slots} | tr ' ' ','));" \
-               "one zigbee2mqtt works with one adapter, so set serial.port in" \
-               "${Z2M_CONFIG_PATH} by hand" ;;
+        *) log "several Zigbee modules in the controller settings (slots" \
+               "$(echo ${slots} | tr ' ' ',')), serial.port left as" \
+               "$(read_port_from_file "${Z2M_CONFIG_PATH}")" ;;
     esac
     exit 0
 }

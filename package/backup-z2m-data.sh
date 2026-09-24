@@ -41,9 +41,10 @@ copy_data_files() {
 # package_name: the name this package really has, with VERSION_TO_NAME it is zigbee2mqtt-1.18.1
 package_name() { echo "${DPKG_MAINTSCRIPT_PACKAGE:-zigbee2mqtt}"; }
 
-# dpkg_action <version passed by fpm>: fpm calls this file without arguments before a fresh
-# install and with the version being replaced before an upgrade. dpkg itself cannot be asked
-# here: it has already written the record of the version being installed
+# dpkg_action <version passed by fpm>:
+# - no argument: a fresh install
+# - a version: an upgrade, and that is the version being replaced
+# dpkg-query would not help here: in preinst it already answers with the version being installed
 dpkg_action() {
     if [ -z "$1" ]; then
         echo "install"
@@ -74,7 +75,7 @@ remove_unfinished_copies() {
     local stale
     for stale in "${Z2M_BACKUP_PATH}"/*.partial; do
         [ -d "${stale}" ] || continue
-        backup_log "removing the unfinished copy ${stale} of an earlier run"
+        backup_log "removing ${stale}, an unfinished backup of an earlier run"
         rm -rf "${stale}"
     done
 }
@@ -87,15 +88,15 @@ rotate_backups() {
     # "tail -n +N" starts printing at line N, so the copies to keep are the lines before it
     ls -1dt "${Z2M_BACKUP_PATH}"/*/ 2>/dev/null | tail -n +$((Z2M_BACKUPS_TO_KEEP + 1)) |
         while read -r older_copy; do
-            backup_log "removing the older copy ${older_copy}"
+            backup_log "keeping ${Z2M_BACKUPS_TO_KEEP} newest backups, removing ${older_copy}"
             rm -rf "${older_copy}"
         done
 }
 
 backup_z2m_data() {
-    local backup_path partial_path name version what
+    local backup_path partial_path files name version what
     if [ ! -d "${Z2M_DATA_PATH}" ]; then
-        backup_log "no data of an earlier installation, nothing to copy"
+        backup_log "no data to back up, ${Z2M_DATA_PATH} does not exist"
         return 0
     fi
 
@@ -104,11 +105,12 @@ backup_z2m_data() {
     partial_path="${backup_path}.partial"
 
     if ! copy_data_files "${partial_path}"; then
-        backup_warn "could not copy ${Z2M_DATA_PATH} to ${partial_path}, removing it"
+        backup_warn "warning: could not back up the data, the install goes on without a backup"
         rm -rf "${partial_path}"
         return 0
     fi
 
+    files=$(find "${partial_path}" -maxdepth 1 -type f | wc -l)
     name=$(package_name)
     version=${1:-}
     what=$(dpkg_action "${version}")
@@ -117,10 +119,10 @@ backup_z2m_data() {
     if write_backup_info "${partial_path}" "${name}" "${what}" "${version}" &&
        mv "${partial_path}" "${backup_path}"
     then
-        backup_log "the data of this installation is copied to ${backup_path}"
+        backup_log "backup before ${what}: ${backup_path}, ${files} files"
         rotate_backups
     else
-        backup_warn "could not finish the copy ${partial_path}, removing it"
+        backup_warn "warning: could not finish the backup, it is removed and the install goes on"
         rm -rf "${partial_path}"
     fi
     return 0
