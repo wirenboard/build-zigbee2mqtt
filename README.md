@@ -171,9 +171,17 @@ install is picked up on the next start. It:
 - fills in `serial.port` from the hardware configuration of the controller, that is from the slot
   the user picked in Settings, Extension Modules and Ports. Nothing is probed: talking to ports
   the user did not declare would disturb whatever else is plugged into the other slots;
-- writes the port only when exactly one Zigbee module is declared and the configuration still
-  carries the port from the template. Zero or several modules, or a port somebody has chosen, and
-  the script only says so in the log.
+- writes the port every time the service starts, so a module moved to another slot is picked up
+  on the next restart. It writes only when exactly one Zigbee module is declared and its slot is
+  one a controller has, 1 to 4. Zero or several modules, a slot outside that range, or a port
+  that is not a slot of this controller, and the script only says so in the log.
+
+The ports a controller can have are `/dev/ttyMOD1` to `/dev/ttyMOD4`. The template carries
+`port: /dev/ttyMOD0`, a slot no controller has, and that is the point: a configuration created
+from the template and never matched to a module says so by itself, instead of naming a port that
+looks like somebody's choice. A port that is not a slot at all, a USB stick at `/dev/ttyUSB0` or a
+coordinator over the network at `tcp://...`, is never touched: whoever wrote it did not mean the
+module from the settings.
 
 The maintainer scripts
 ----------------------
