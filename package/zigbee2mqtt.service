@@ -4,6 +4,9 @@ After=network.target mosquitto.service
 BindsTo=mosquitto.service
 
 [Service]
+# Resolves the serial port from the slot picked in the web interface, so a module declared
+# after the install is picked up on the next start. Never fails the service
+ExecStartPre=/usr/lib/zigbee2mqtt/setup-z2m-config.sh
 ExecStart=/usr/bin/npm start
 SyslogIdentifier=zigbee2mqtt
 WorkingDirectory=/mnt/data/root/zigbee2mqtt

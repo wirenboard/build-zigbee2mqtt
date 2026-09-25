@@ -1,25 +1,22 @@
 #!/bin/sh
-# Runs on the controller after an upgrade has unpacked the new package.
-# fpm inlines this file into the body of a function of the generated maintainer script, so the
-# shebang and any `set` here would have no effect, and a failing command does not stop the upgrade.
-# That is why every step below reports for itself.
+# Runs on the controller after an upgrade unpacked the new package. fpm inlines it into a
+# maintainer script function, where a failing command does not stop the upgrade
 
 CONFIG_FILE=/mnt/data/root/zigbee2mqtt/data/configuration.yaml
 
-# Restore user configuration saved before upgrade.
-# Done first so that the config is safe even if a later step (pnpm install) fails;
-# successful mv also removes .wb-old, preventing a stale backup from leaking
-# into the next upgrade.
-if [ -e "${CONFIG_FILE}.wb-old" ]; then
-    echo "Restoring configuration file after upgrade"
-    mv "${CONFIG_FILE}.wb-old" "${CONFIG_FILE}"
-fi
+# The configuration does not travel in the package, so nothing is saved before the upgrade and
+# nothing is restored here. This creates it when there is none and fills in the serial port
+/usr/lib/zigbee2mqtt/setup-z2m-config.sh
 
-echo "Adding dependencies for pnpm"
+echo "zigbee2mqtt: adding dependencies for pnpm"
 # Dependencies already included in .deb — this just prevents runtime issues
 pnpm install --prod --frozen-lockfile --force --prefix /mnt/data/root/zigbee2mqtt
 
-if ! grep -Pzq 'serial:\n(  .*\n)*  adapter: zstack' "${CONFIG_FILE}"; then
+# Keys the package has started to rely on reach existing configurations only from here: the file
+# belongs to the user now, and a changed template does not travel to controllers by itself
+# The file has to exist for the two blocks below: setup-z2m-config.sh never fails, and without
+# this check "cat >>" would create a configuration holding nothing but "availability:"
+if [ -e "${CONFIG_FILE}" ] && ! grep -Pzq 'serial:\n(  .*\n)*  adapter: zstack' "${CONFIG_FILE}"; then
     LINE=$(awk '
         /^serial:/ { inside=1; next }
         inside && /^[^ ]/ { exit }
@@ -32,10 +29,10 @@ if ! grep -Pzq 'serial:\n(  .*\n)*  adapter: zstack' "${CONFIG_FILE}"; then
     else
         sed -i "/^serial:/a \  adapter: zstack" "${CONFIG_FILE}"
     fi
-    echo "zstack adapter type added to the configuration file"
+    echo "zigbee2mqtt: zstack adapter type added to the configuration"
 fi
 
-if ! grep -q '^availability:' "${CONFIG_FILE}"; then
+if [ -e "${CONFIG_FILE}" ] && ! grep -q '^availability:' "${CONFIG_FILE}"; then
     cat >> "${CONFIG_FILE}" <<'EOF'
 availability:
   enabled: true
@@ -44,5 +41,5 @@ availability:
     max_jitter: 30000
     backoff: true
 EOF
-    echo "availability section added to the configuration file"
+    echo "zigbee2mqtt: availability section added to the configuration"
 fi
