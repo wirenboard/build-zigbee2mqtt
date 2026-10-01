@@ -1,3 +1,10 @@
+zigbee2mqtt (2.14.1-wb103) stable; urgency=medium
+
+  * the upgrade no longer runs pnpm install: the package carries its dependencies already
+  * corepack is no longer enabled on the controller: nothing calls pnpm there any more
+
+ -- Victor Fedorov <victor.fedorov@wirenboard.com>  Thu, 01 Oct 2026 12:00:00 +0300
+
 zigbee2mqtt (2.14.1-wb102) stable; urgency=medium
 
   * configuration.yaml is no longer a dpkg conffile: created from a template only when missing
