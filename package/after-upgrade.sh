@@ -8,10 +8,6 @@ CONFIG_FILE=/mnt/data/root/zigbee2mqtt/data/configuration.yaml
 # nothing is restored here. This creates it when there is none and fills in the serial port
 /usr/lib/zigbee2mqtt/setup-z2m-config.sh
 
-echo "zigbee2mqtt: adding dependencies for pnpm"
-# Dependencies already included in .deb — this just prevents runtime issues
-pnpm install --prod --frozen-lockfile --force --prefix /mnt/data/root/zigbee2mqtt
-
 # Keys the package has started to rely on reach existing configurations only from here: the file
 # belongs to the user now, and a changed template does not travel to controllers by itself
 # The file has to exist for the two blocks below: setup-z2m-config.sh never fails, and without
