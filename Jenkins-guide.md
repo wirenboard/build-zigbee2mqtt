@@ -301,3 +301,6 @@ Node.js in the rootfs for this build: installed version and the repository it ca
 с логом в syslog через unix-сокет не запускается. Граница `<< 25` не даёт\
 поставить такой пакет на следующий мажор: при переходе на него z2m нужно\
 пересобрать вместе с Node.
+
+## Важно
+Не нажимать FORCE_OVERWRITE - это может все поломать
