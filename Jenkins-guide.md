@@ -227,6 +227,8 @@ Node.js in the rootfs for this build: installed version and the repository it ca
 
 ### FORCE_OVERWRITE
 
+Не нажимать без особой необходимости - это может все поломать
+
 Работает только вместе с `UPLOAD_TO_POOL`. Если такая версия в пуле уже есть, `wbci-repo` её
 не трогает: пишет в лог `already exists in pool`, пропускает файл и завершает стадию успешно.
 То есть без этой галочки повторная выкладка молча ничего не меняет. Галочка заменяет пакет в
@@ -301,6 +303,3 @@ Node.js in the rootfs for this build: installed version and the repository it ca
 с логом в syslog через unix-сокет не запускается. Граница `<< 25` не даёт\
 поставить такой пакет на следующий мажор: при переходе на него z2m нужно\
 пересобрать вместе с Node.
-
-## Важно
-Не нажимать FORCE_OVERWRITE - это может все поломать
