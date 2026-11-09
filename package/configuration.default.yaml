@@ -2,7 +2,7 @@ homeassistant: false
 permit_join: false
 mqtt:
   base_topic: zigbee2mqtt
-  server: 'mqtt://localhost'
+  server: 'mqtt+unix:///var/run/mosquitto/mosquitto.sock'
 serial:
   port: /dev/ttyMOD0
   adapter: zstack

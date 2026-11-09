@@ -183,6 +183,21 @@ looks like somebody's choice. A port that is not a slot at all, a USB stick at `
 coordinator over the network at `tcp://...`, is never touched: whoever wrote it did not mean the
 module from the settings.
 
+The template connects zigbee2mqtt to the local mosquitto over its unix socket,
+`mqtt+unix:///var/run/mosquitto/mosquitto.sock`, the listener wb-configs ships for local clients;
+MQTT.js, the client zigbee2mqtt uses, takes the `mqtt+unix://` scheme and the path after it.
+Packages before 2.14.2-wb102 wrote `mqtt://localhost`, and `package/after-upgrade.sh` moves an
+existing configuration to the socket on the upgrade that crosses that version, when:
+
+- `mqtt.server` is still exactly `mqtt://localhost`: any other address, a remote broker or
+  `mqtt://localhost:1883` typed by hand, is somebody's choice and stays;
+- the configuration of mosquitto in `/etc/mosquitto` has a `listener 0` on that socket. Without
+  it zigbee2mqtt would not connect at all, so the address stays and the log says why.
+
+The move happens once: an upgrade from 2.14.2-wb102 or later leaves `mqtt://localhost` alone, so a
+user who puts it back keeps it. zigbee2mqtt reads the address when it starts, so the new one
+takes effect on the next start of the service.
+
 The maintainer scripts
 ----------------------
 

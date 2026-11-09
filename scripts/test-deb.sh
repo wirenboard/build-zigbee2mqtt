@@ -406,13 +406,97 @@ test_serialport_binding_loads() {
 
 ### the upgrade from the repositories
 
+# mqtt_server_in <path>: mqtt.server as written, quotes included
+mqtt_server_in() {
+    awk '/^[^[:space:]#]/ { in_mqtt = ($0 ~ /^mqtt:/) } in_mqtt && $1 == "server:" { print $2; exit }' "$1"
+}
+
+# without_mqtt_server <path>: the file without the server line of the mqtt: block
+without_mqtt_server() {
+    awk '/^[^[:space:]#]/ { in_mqtt = ($0 ~ /^mqtt:/) } !(in_mqtt && $1 == "server:")' "$1"
+}
+
+# with_server <address>: the template with that mqtt.server, written as the configuration
+with_server() {
+    sed "s|^  server: .*|  server: $1|" /usr/share/zigbee2mqtt/configuration.default.yaml \
+        > "${APP}/data/configuration.yaml"
+}
+
+# run_postinst_upgrade_from <version> <log>: the postinst of the installed package, called the
+# way dpkg calls it on an upgrade from that version
+run_postinst_upgrade_from() {
+    forbid_service_start
+    "/var/lib/dpkg/info/$(deb_field Package).postinst" configure "$1" > "$2" 2>&1
+    allow_service_start
+}
+
+# Runs the postinst of the installed package against configurations a controller may carry, so
+# the move to the unix socket of mosquitto is checked whatever the repositories hold.
+# Checks:
+#   - the old default mqtt://localhost moves to the socket on an upgrade from before 2.14.2-wb102,
+#     and nothing else in the file changes
+#   - it stays on an upgrade from 2.14.2-wb102 on: a user who put it back keeps it
+#   - an address the user set stays
+#   - it stays when mosquitto has no listener on the socket
+# Does not check:
+#   - that zigbee2mqtt connects over the socket: there is no mosquitto running here
+test_mqtt_server_moved_to_socket() {
+    config_path=${APP}/data/configuration.yaml
+    template=/usr/share/zigbee2mqtt/configuration.default.yaml
+    socket_server="'mqtt+unix:///var/run/mosquitto/mosquitto.sock'"
+    listener_conf=/etc/mosquitto/conf.d/zz-wb-test-socket-listener.conf
+    log=/tmp/postinst-mqtt.log
+
+    check "the template points to the socket" "${socket_server}" "$(mqtt_server_in "${template}")"
+    cp "${config_path}" "${config_path}.before-test"
+
+    real_listener=$(yes_no grep -rqsE \
+        '^[[:space:]]*listener[[:space:]]+0[[:space:]]+(/var)?/run/mosquitto/mosquitto\.sock' \
+        /etc/mosquitto)
+    if [ "${real_listener}" = yes ]; then
+        skip "${CURRENT}: no listener case, mosquitto here listens on the socket already"
+    else
+        with_server "'mqtt://localhost'"
+        run_postinst_upgrade_from 2.14.2-wb101 "${log}"
+        check "no listener: mqtt://localhost stays" "'mqtt://localhost'" \
+              "$(mqtt_server_in "${config_path}")"
+    fi
+
+    mkdir -p "$(dirname "${listener_conf}")"
+    echo 'listener 0 /var/run/mosquitto/mosquitto.sock' > "${listener_conf}"
+
+    with_server "'mqtt://localhost'"
+    cp "${config_path}" "${config_path}.old-default"
+    run_postinst_upgrade_from 2.14.2-wb101 "${log}"
+    check "from 2.14.2-wb101: mqtt://localhost moves to the socket" "${socket_server}" \
+          "$(mqtt_server_in "${config_path}")"
+    check "the rest of the file is the same" "yes" \
+          "$(yes_no cmp -s <(without_mqtt_server "${config_path}.old-default") \
+                           <(without_mqtt_server "${config_path}"))"
+    grep 'mqtt.server' "${log}" | sed 's/^/        /'
+
+    with_server "'mqtt://localhost'"
+    run_postinst_upgrade_from 2.14.2-wb102 "${log}"
+    check "from 2.14.2-wb102: mqtt://localhost stays" "'mqtt://localhost'" \
+          "$(mqtt_server_in "${config_path}")"
+
+    with_server "'mqtt://192.168.0.10:1883'"
+    run_postinst_upgrade_from 2.14.2-wb101 "${log}"
+    check "an address the user set stays" "'mqtt://192.168.0.10:1883'" \
+          "$(mqtt_server_in "${config_path}")"
+
+    rm -f "${listener_conf}" "${config_path}.old-default"
+    mv "${config_path}.before-test" "${config_path}"
+}
+
 # Installs the released version, marks its configuration and upgrades to the package built here.
 # The configuration has to survive: this package does not ship it, so dpkg has nothing to replace,
-# and the maintainer scripts must not touch a file that is already there.
+# and the maintainer scripts must not touch a file that is already there, apart from the one key
+# they migrate: mqtt.server moves to the socket of mosquitto when it still carries the old default.
 # Checks:
 #   - the upgrade really happens: the version before is the released one, the version after is the
 #     one from this build
-#   - the configuration file is the same after the upgrade, byte for byte
+#   - the configuration file is the same after the upgrade, byte for byte apart from mqtt.server
 # Does not check:
 #   - an upgrade from a version older than the repositories carry
 #   - a downgrade to the released version, which does ask about the configuration: the file our
@@ -456,8 +540,12 @@ test_upgrade_keeps_config() {
           "$(dpkg-query -W -f='${Version}' zigbee2mqtt)"
     check "the marker survives the upgrade" "yes" \
           "$(yes_no grep -q 'wb-upgrade-marker' "${config_path}")"
-    check "the configuration is the same file" "yes" \
-          "$(yes_no cmp -s "${config_path}.before-upgrade" "${config_path}")"
+    # mqtt.server may move to the socket on the way, test_mqtt_server_moved_to_socket checks when
+    info  "mqtt.server before and after" \
+          "$(mqtt_server_in "${config_path}.before-upgrade") -> $(mqtt_server_in "${config_path}")"
+    check "the configuration is the same file, apart from mqtt.server" "yes" \
+          "$(yes_no cmp -s <(without_mqtt_server "${config_path}.before-upgrade") \
+                           <(without_mqtt_server "${config_path}"))"
     cmp -s "${config_path}.before-upgrade" "${config_path}" ||
         diff -u "${config_path}.before-upgrade" "${config_path}" | head -20 | sed 's/^/        /'
 
@@ -490,7 +578,8 @@ SUITE_MODULES="test_node_abi
                test_unix_dgram_loads
                test_serialport_binding_loads"
 
-SUITE_UPGRADE="test_upgrade_keeps_config"
+SUITE_UPGRADE="test_mqtt_server_moved_to_socket
+               test_upgrade_keeps_config"
 
 ALL_SUITES="${SUITE_DEB} ${SUITE_INSTALLED} ${SUITE_APPLICATION} ${SUITE_MODULES} ${SUITE_UPGRADE}"
 

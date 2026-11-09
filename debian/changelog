@@ -1,3 +1,10 @@
+zigbee2mqtt (2.14.2-wb102) stable; urgency=medium
+
+  * zigbee2mqtt connects to mosquitto over its unix socket, /var/run/mosquitto/mosquitto.sock
+  * the upgrade moves mqtt.server from the old default mqtt://localhost to that socket
+
+ -- Nikolay Korotkiy <nikolay.korotkiy@struhe.com>  Mon, 09 Nov 2026 12:00:00 +0300
+
 zigbee2mqtt (2.14.2-wb101) stable; urgency=medium
 
   * the service survives a restart of mosquitto: Wants instead of BindsTo in the unit
