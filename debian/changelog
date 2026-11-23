@@ -1,3 +1,9 @@
+zigbee2mqtt (2.14.3-wb100) stable; urgency=medium
+
+  * New upstream release: bump version to 2.14.3
+
+ -- Ilya Tikhonyuk <ilya.tikhonyuk@wirenboard.com>  Wed, 18 Nov 2026 17:13:59 +0300
+
 zigbee2mqtt (2.14.2-wb102) stable; urgency=medium
 
   * zigbee2mqtt connects to mosquitto over its unix socket, /var/run/mosquitto/mosquitto.sock
