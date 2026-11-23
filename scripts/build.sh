@@ -146,9 +146,10 @@ build_application() {
 
 # TEMPORARY, goes away with package/backup-z2m-data.sh. dpkg calls one of the two preinst
 # functions fpm generates, so the copy of the data has to be in both. Writes the pair into the
-# file named by the caller, who removes it once fpm has read it
+# file named by the caller, who removes it once fpm has read it.
+# before-upgrade.sh goes first: the copy is made after the service has stopped
 before_upgrade_with_backup() {
-    cat package/backup-z2m-data.sh package/before-upgrade.sh > "$1"
+    cat package/before-upgrade.sh package/backup-z2m-data.sh > "$1"
 }
 
 # "data/configuration.yaml" is excluded on purpose: the package ships a template instead, and

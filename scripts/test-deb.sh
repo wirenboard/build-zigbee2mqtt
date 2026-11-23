@@ -188,6 +188,42 @@ test_contents() {
           "$(grep -c '/\.git[a-z]' <<<"${contents}") files"
 }
 
+# The upgrade stops the service before the unpack, see package/before-upgrade.sh. The pre-install
+# script is run by hand, with a systemctl that only records its calls.
+# Checks:
+#   - an upgrade stops the unit, and does it before the copy of the data
+#   - a first install stops nothing
+# Does not check:
+#   - that a running zigbee2mqtt stops cleanly: this rootfs has no systemd
+test_upgrade_stops_service_before_unpack() {
+    preinst=/tmp/z2m-preinst
+    calls=/tmp/z2m-systemctl-calls
+    fakes=/tmp/z2m-fake-systemctl
+    dpkg-deb --info "${DEB}" preinst > "${preinst}"
+
+    # Both answer 0, so the script sees a running service
+    mkdir -p "${fakes}"
+    for tool in systemctl deb-systemd-invoke; do
+        printf '#!/bin/sh\necho "%s $*" >> %s\n' "${tool}" "${calls}" > "${fakes}/${tool}"
+        chmod 0755 "${fakes}/${tool}"
+    done
+
+    : > "${calls}"
+    PATH="${fakes}:${PATH}" sh "${preinst}" upgrade 2.0.0-wb1 > /tmp/preinst-upgrade.log 2>&1
+    check "an upgrade stops the service" "yes" \
+          "$(yes_no grep -q 'stop zigbee2mqtt\.service' "${calls}")"
+    stop_line=$(grep -n -m 1 'stopping the service' /tmp/preinst-upgrade.log | cut -d: -f1)
+    copy_line=$(grep -n -m 1 -E 'backup before|no data to back up' /tmp/preinst-upgrade.log | cut -d: -f1)
+    check "the stop comes before the copy of the data" "yes" \
+          "$(yes_no test "${stop_line:-0}" -gt 0 -a "${stop_line:-0}" -lt "${copy_line:-0}")"
+
+    : > "${calls}"
+    PATH="${fakes}:${PATH}" sh "${preinst}" install > /tmp/preinst-install.log 2>&1
+    check "a first install stops nothing" "no" "$(yes_no grep -q ' stop ' "${calls}")"
+
+    rm -rf "${fakes}" "${preinst}" "${calls}"
+}
+
 # TEMPORARY, goes away with package/backup-z2m-data.sh.
 # Checks:
 #   - an install over an existing installation leaves one more copy, with the configuration in it
@@ -562,6 +598,7 @@ SUITE_DEB="test_control_fields
            test_contents
            test_developer_files_not_packaged
            test_config_is_not_packaged
+           test_upgrade_stops_service_before_unpack
            test_dependencies_resolvable"
 
 SUITE_INSTALLED="test_installed_version
