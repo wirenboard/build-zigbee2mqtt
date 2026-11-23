@@ -207,6 +207,12 @@ a function of the maintainer script it generates. The shebang and any `set` in s
 effect there, and a failing command does not stop the install: that is why every step in them
 reports for itself instead of relying on an exit code.
 
+An upgrade stops the service before dpkg unpacks anything, in `package/before-upgrade.sh`, and
+copies the data only after that. fpm restarts the service at the end of an upgrade by itself, but
+by then the files are the new ones: a zigbee2mqtt stopped at that point cannot load the modules of
+its own version, logs `Failed to stop Zigbee2MQTT` and exits without saving the state of the
+coordinator. If the upgrade breaks between the stop and that restart, the service stays stopped.
+
 How to build
 ------------
 
