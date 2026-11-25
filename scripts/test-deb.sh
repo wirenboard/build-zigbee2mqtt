@@ -181,6 +181,10 @@ test_contents() {
           "$(yes_no grep -q "\.${APP}/index.js\$" <<<"${contents}")"
     check "systemd unit"         "yes" \
           "$(yes_no grep -q 'zigbee2mqtt\.service$' <<<"${contents}")"
+    check "module guard script"  "yes" \
+          "$(yes_no grep -q 'usr/lib/zigbee2mqtt/zigbee_module_guard\.py$' <<<"${contents}")"
+    check "watchdog units"       "2" \
+          "$(grep -c 'lib/systemd/system/zigbee2mqtt-watchdog\.\(service\|timer\)$' <<<"${contents}")"
     # The repository of zigbee2mqtt itself, which fpm is told to exclude. Files like .github or
     # .gitattributes inside dependencies are upstream's own and only counted
     check "no repository data"   "0"   "$(grep -c '/\.git/' <<<"${contents}")"
@@ -222,6 +226,19 @@ test_upgrade_stops_service_before_unpack() {
     check "a first install stops nothing" "no" "$(yes_no grep -q ' stop ' "${calls}")"
 
     rm -rf "${fakes}" "${preinst}" "${calls}"
+}
+
+# The watchdog timer is enabled and disabled by the maintainer scripts only.
+# Does not check that systemd obeys: this rootfs has no systemd
+test_watchdog_timer_in_maintainer_scripts() {
+    postinst=$(dpkg-deb --info "${DEB}" postinst)
+    prerm=$(dpkg-deb --info "${DEB}" prerm)
+    check "a first install enables the timer" "yes" \
+          "$(yes_no grep -q 'enable --now zigbee2mqtt-watchdog\.timer' <<<"${postinst}")"
+    check "an upgrade knows the timer"        "yes" \
+          "$(yes_no grep -q '^WATCHDOG_TIMER=zigbee2mqtt-watchdog\.timer$' <<<"${postinst}")"
+    check "a removal disables the timer"      "yes" \
+          "$(yes_no grep -q 'disable --now zigbee2mqtt-watchdog\.timer' <<<"${prerm}")"
 }
 
 # TEMPORARY, goes away with package/backup-z2m-data.sh.
@@ -378,6 +395,35 @@ test_size_within_bounds() {
 test_service_unit_installed() {
     check "systemd unit in place" "yes" \
           "$(yes_no test -f /lib/systemd/system/zigbee2mqtt.service)"
+}
+
+# package/zigbee_module_guard.py and its watchdog units
+test_module_guard_installed() {
+    guard=/usr/lib/zigbee2mqtt/zigbee_module_guard.py
+    units=/lib/systemd/system
+    check "the module guard script in place" "yes" "$(yes_no test -f "${guard}")"
+    check "the watchdog service in place"    "yes" "$(yes_no test -f "${units}/zigbee2mqtt-watchdog.service")"
+    check "the watchdog timer in place"      "yes" "$(yes_no test -f "${units}/zigbee2mqtt-watchdog.timer")"
+    check "the service asks the module before it starts" "yes" \
+          "$(yes_no grep -q "^ExecStartPre=-.* ${guard} recover\$" "${units}/zigbee2mqtt.service")"
+    check "the timer runs the watchdog"      "yes" \
+          "$(yes_no grep -q "^ExecStart=.* ${guard} watch\$" "${units}/zigbee2mqtt-watchdog.service")"
+}
+
+# scripts/test_zigbee_module_guard.py against the installed script: configurations, watchdog
+# decisions, the exchange with a module played by a pseudo-terminal. No real module or reset line
+test_module_guard_logic() {
+    need_command python3 || return 0
+    python3 "$(dirname "$0")/test_zigbee_module_guard.py" /usr/lib/zigbee2mqtt/zigbee_module_guard.py \
+            > /tmp/z2m-guard-test.log 2>&1
+    rc=$?
+    # 77: no pseudo-terminal in this rootfs
+    if [ "${rc}" -eq 77 ]; then
+        skip "${CURRENT}: no pseudo-terminal here"
+        return 0
+    fi
+    check "the checks of the module guard pass" "0" "${rc}"
+    [ "${rc}" -eq 0 ] || grep -E '^FAIL|Error|Traceback' -A 3 /tmp/z2m-guard-test.log | sed 's/^/        /'
 }
 
 # Nothing ships the file, so the install has to create it from the template
@@ -599,6 +645,7 @@ SUITE_DEB="test_control_fields
            test_developer_files_not_packaged
            test_config_is_not_packaged
            test_upgrade_stops_service_before_unpack
+           test_watchdog_timer_in_maintainer_scripts
            test_dependencies_resolvable"
 
 SUITE_INSTALLED="test_installed_version
@@ -607,6 +654,8 @@ SUITE_INSTALLED="test_installed_version
                  test_version_matches_sources
                  test_size_within_bounds
                  test_service_unit_installed
+                 test_module_guard_installed
+                 test_module_guard_logic
                  test_config_created_on_install"
 
 SUITE_APPLICATION="test_smoke_start"

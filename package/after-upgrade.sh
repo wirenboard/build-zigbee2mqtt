@@ -88,3 +88,14 @@ then
              "left as ${MQTT_SERVER}"
     fi
 fi
+
+# The watchdog timer is enabled once, by the upgrade that brings it; later upgrades keep the
+# choice of the user
+WATCHDOG_SINCE=2.14.3-wb102
+WATCHDOG_TIMER=zigbee2mqtt-watchdog.timer
+systemctl --system daemon-reload > /dev/null 2>&1 || true
+if [ -n "${1:-}" ] && dpkg --compare-versions "$1" lt "${WATCHDOG_SINCE}"; then
+    systemctl enable --now "${WATCHDOG_TIMER}" > /dev/null 2>&1 || true
+else
+    systemctl try-restart "${WATCHDOG_TIMER}" > /dev/null 2>&1 || true
+fi

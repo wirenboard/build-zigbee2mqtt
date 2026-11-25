@@ -7,6 +7,8 @@ Wants=mosquitto.service
 # Resolves the serial port from the slot picked in the web interface, so a module declared
 # after the install is picked up on the next start. Never fails the service
 ExecStartPre=/usr/lib/zigbee2mqtt/setup-z2m-config.sh
+# Resets the Zigbee module of the slot if it does not answer. "-": never fails the service
+ExecStartPre=-/usr/bin/python3 /usr/lib/zigbee2mqtt/zigbee_module_guard.py recover
 ExecStart=/usr/bin/npm start
 SyslogIdentifier=zigbee2mqtt
 WorkingDirectory=/mnt/data/root/zigbee2mqtt

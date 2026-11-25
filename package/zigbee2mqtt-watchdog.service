@@ -1,0 +1,9 @@
+[Unit]
+Description=Restarts zigbee2mqtt when its Zigbee module has stopped answering
+After=zigbee2mqtt.service
+
+[Service]
+Type=oneshot
+# Through the interpreter: no executable bit needed
+ExecStart=/usr/bin/python3 /usr/lib/zigbee2mqtt/zigbee_module_guard.py watch
+SyslogIdentifier=zigbee2mqtt-watchdog

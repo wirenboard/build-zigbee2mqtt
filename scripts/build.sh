@@ -164,6 +164,9 @@ pack_deb_with_fpm() {
     # TODO: --deb-after-purge package/after-purge.sh, to wipe /mnt/data/root/zigbee2mqtt when the
     # package is purged. fpm 1.18.0 takes the flag and does nothing with it: the option handler
     # puts the path into attributes[:deb_after_purge], and nothing in fpm ever reads that attribute
+    #
+    # The watchdog units are plain files: --deb-systemd would start the one-shot service too.
+    # The maintainer scripts enable and disable the timer
     fpm --input-type dir \
         --output-type deb \
         --name "${PKG_NAME}" \
@@ -186,11 +189,15 @@ pack_deb_with_fpm() {
         --before-install package/backup-z2m-data.sh \
         --before-upgrade "${before_upgrade}" \
         --after-upgrade package/after-upgrade.sh \
+        --before-remove package/before-remove.sh \
         --package "${RESULT_DIR}/result.deb" \
         "${FPM_EXTRA[@]}" \
         "${SOURCES}"=/mnt/data/root \
         package/configuration.default.yaml=/usr/share/zigbee2mqtt/configuration.default.yaml \
-        package/setup-z2m-config.sh=/usr/lib/zigbee2mqtt/setup-z2m-config.sh
+        package/setup-z2m-config.sh=/usr/lib/zigbee2mqtt/setup-z2m-config.sh \
+        package/zigbee_module_guard.py=/usr/lib/zigbee2mqtt/zigbee_module_guard.py \
+        package/zigbee2mqtt-watchdog.service=/lib/systemd/system/zigbee2mqtt-watchdog.service \
+        package/zigbee2mqtt-watchdog.timer=/lib/systemd/system/zigbee2mqtt-watchdog.timer
 
     rm -f "${before_upgrade}"
     dpkg-name "${RESULT_DIR}/result.deb"

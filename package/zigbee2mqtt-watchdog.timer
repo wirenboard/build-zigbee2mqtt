@@ -1,0 +1,11 @@
+[Unit]
+Description=Checks that the Zigbee module answers zigbee2mqtt
+
+[Timer]
+# From the end of the previous check; stays under StartLimitBurst of zigbee2mqtt.service
+OnBootSec=5min
+OnUnitInactiveSec=5min
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

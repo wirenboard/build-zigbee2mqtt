@@ -1,3 +1,9 @@
+zigbee2mqtt (2.14.3-wb102) stable; urgency=medium
+
+  * reset a Zigbee module that stopped answering: on service start and by a watchdog timer
+
+ -- Ilya Tikhonyuk <ilya.tikhonyuk@wirenboard.com>  Wed, 25 Nov 2026 18:30:00 +0300
+
 zigbee2mqtt (2.14.3-wb101) stable; urgency=medium
 
   * the upgrade stops the service before it replaces the files: the running version no longer
