@@ -16,7 +16,7 @@ import os
 import re
 import select
 import struct
-import subprocess
+import subprocess  # nosec B404 - runs systemctl and the gpiod tools: fixed argv, no shell
 import sys
 import termios
 import time
@@ -25,7 +25,7 @@ CONFIG_PATH = "/mnt/data/root/zigbee2mqtt/data/configuration.yaml"
 STATE_PATH = "/run/zigbee2mqtt-module-guard.json"
 UNIT = "zigbee2mqtt.service"
 
-# The numbers come from the code they have to agree with, see README
+# Each number comes from the code it has to agree with
 BAUD = termios.B115200  # zigbee-herdsman default for zstack
 ANSWER_TIMEOUT_S = 6  # zigbee-herdsman znp.ts, timeouts.SREQ
 LONGEST_ANSWER_S = 40  # znp.ts, the requests that start the network
@@ -172,14 +172,12 @@ def read_counters(port_path):
 ### the reset line of the slot
 
 
-def run(command):
-    return subprocess.run(command, capture_output=True, text=True, check=False)
-
-
 def find_rts_line(slot):
     """(chip, line) named "MOD<slot> RTS", or None. Needs gpiod 2"""
     try:
-        found = run(["gpioinfo", f"MOD{slot} RTS"])
+        found = subprocess.run(  # nosec B603 - fixed argv, no shell
+            ["/usr/bin/gpioinfo", f"MOD{slot} RTS"], capture_output=True, text=True, check=False
+        )
     except OSError:
         return None
     fields = found.stdout.split()
@@ -191,8 +189,14 @@ def find_rts_line(slot):
 def pulse_rts(chip, line):
     """High, low, then back to an input as after boot"""
     for value in ("1", "0"):
-        run(["gpioset", "-p", RTS_PULSE, "-t0", "-c", chip, f"{line}={value}"])
-    run(["gpioget", "-c", chip, line])
+        subprocess.run(  # nosec B603 - fixed argv, no shell
+            ["/usr/bin/gpioset", "-p", RTS_PULSE, "-t0", "-c", chip, f"{line}={value}"],
+            capture_output=True,
+            check=False,
+        )
+    subprocess.run(  # nosec B603 - fixed argv, no shell
+        ["/usr/bin/gpioget", "-c", chip, line], capture_output=True, check=False
+    )
 
 
 ### recover: before zigbee2mqtt starts
@@ -238,24 +242,32 @@ def command_recover():
         return
     try:
         recover(port_path, slot)
-    except OSError as error:
+    except (OSError, termios.error) as error:  # termios.error is not an OSError
         log("warning", f"cannot check the Zigbee module on {port_path}: {error}")
 
 
 ### watch: one pass of the timer
 
 
+def systemctl(*arguments):
+    return subprocess.run(  # nosec B603 - fixed argv, no shell
+        ["/bin/systemctl", *arguments], capture_output=True, text=True, check=False
+    )
+
+
 def unit_properties():
-    shown = run(["systemctl", "show", UNIT, "-p", "ActiveState,UnitFileState,ActiveEnterTimestampMonotonic"])
+    shown = systemctl("show", UNIT, "-p", "ActiveState,UnitFileState,ActiveEnterTimestampMonotonic")
     return dict(line.split("=", 1) for line in shown.stdout.splitlines() if "=" in line)
 
 
 def load_sample():
+    """The previous look, None if there is none or the file holds something else"""
     try:
         with open(STATE_PATH, encoding="utf-8") as state:
-            return json.load(state)
+            sample = json.load(state)
     except (OSError, ValueError):
         return None
+    return sample if isinstance(sample, dict) else None
 
 
 def save_sample(sample):
@@ -320,10 +332,10 @@ def watch_running(port_path, properties):
     log(
         "warning",
         f"the Zigbee module on {port_path} has not sent a byte while zigbee2mqtt sent "
-        f"{current['tx'] - previous['tx']}, and {LONGEST_ANSWER_S} s more changed nothing: "
+        f"{current['tx'] - previous.get('tx', 0)}, and {LONGEST_ANSWER_S} s more changed nothing: "
         "restarting zigbee2mqtt, the module is checked and reset on its start",
     )
-    run(["systemctl", "--no-block", "restart", UNIT])
+    systemctl("--no-block", "restart", UNIT)
 
 
 def watch_failed(port_path, slot, properties):
@@ -335,8 +347,8 @@ def watch_failed(port_path, slot, properties):
     answers, was_reset = recover(port_path, slot)
     if answers and was_reset:
         log("notice", "starting zigbee2mqtt, which had failed while the module was silent")
-        run(["systemctl", "reset-failed", UNIT])
-        run(["systemctl", "--no-block", "start", UNIT])
+        systemctl("reset-failed", UNIT)
+        systemctl("--no-block", "start", UNIT)
     elif answers:
         log("debug", "zigbee2mqtt has failed although the module answers, not a case for this watchdog")
 
@@ -358,7 +370,7 @@ def command_watch():
         else:
             forget_sample()
             log("debug", f"zigbee2mqtt is {state}, nothing to watch")
-    except OSError as error:
+    except (OSError, termios.error) as error:
         log("warning", f"cannot watch the Zigbee module on {port_path}: {error}")
 
 

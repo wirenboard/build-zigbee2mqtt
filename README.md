@@ -10,7 +10,7 @@ zigbee2mqtt package for Wiren Board repository.
 | `scripts/build.sh` | installs Node.js and the toolchain, builds with pnpm (`--step build`), packs with fpm (`--step pack`) |
 | `scripts/prune-files.sh` | between the two steps: removes what nobody can use on a controller, and answers `--check` |
 | `scripts/test-deb.sh` | checks the built package before it is uploaded |
-| `scripts/test_zigbee_module_guard.py` | checks `package/zigbee_module_guard.py` without a controller, run by `test-deb.sh` |
+| `scripts/test_zigbee_module_guard.py` | checks the decisions of `package/zigbee_module_guard.py`, run by `test-deb.sh` |
 | `package/` | what goes into the package: the service unit, the configuration template, the maintainer scripts |
 | `debian/changelog` | the version of the package, the only place it is set; packed as the changelog of the package |
 | `TODO.md` | questions left open, to settle with the team |
@@ -202,58 +202,30 @@ takes effect on the next start of the service.
 A Zigbee module that stops answering
 ------------------------------------
 
-The coordinator firmware of WBE2R-R-ZIGBEE v.2, Z-Stack 3.x by Koenkk on a CC2652P, is known to
-stop answering over the serial port once in a few weeks. It has no watchdog of its own, so it
-stays silent until the chip is reset, and zigbee2mqtt does not notice: the service stays active
-with a dead network, and after a restart it fails with `SRSP - SYS - ping after 6000ms`. Upstream
-has no fix, see https://github.com/Koenkk/Z-Stack-firmware/discussions/545 and issue 613 there.
+The coordinator firmware of WBE2R-R-ZIGBEE v.2, Z-Stack 3.x by Koenkk, stops answering over the
+serial port once in a few weeks and has no watchdog. zigbee2mqtt does not notice: the service
+stays active with a dead network. Upstream has no fix, see
+https://github.com/Koenkk/Z-Stack-firmware/discussions/545.
 
-`package/zigbee_module_guard.py`, installed as `/usr/lib/zigbee2mqtt/zigbee_module_guard.py`,
-works around it from the controller. It applies to `serial.adapter: zstack` on `/dev/ttyMOD1` to
-`/dev/ttyMOD4` only: a USB stick or a coordinator over the network has no reset line the
-controller could pull.
+`package/zigbee_module_guard.py` works around it for `serial.adapter: zstack` on `/dev/ttyMOD1`
+to `/dev/ttyMOD4`:
 
-- `recover` runs from `ExecStartPre` of the service. It asks the module what zigbee2mqtt asks
-  first, `SYS ping`, three times. An answer, and nothing else happens. No answer, and it pulses the
-  line the kernel names `MOD<slot> RTS`, the way `wb-cc2652p-flasher` does to enter the ROM
-  bootloader of the chip, tells the bootloader to start the firmware, and asks again.
-- `watch` runs from `zigbee2mqtt-watchdog.timer` every five minutes. It reads the byte counters
-  the kernel keeps for the port and restarts zigbee2mqtt only when all of this holds: the service
-  has been running since the previous look, zigbee2mqtt has sent requests, not a byte has come
-  back, and 40 seconds later still none has. A healthy module answers every request, so a quiet
-  network, where nobody sends anything, is never taken for a silent module. The restart runs
-  `recover`, which resets the chip. When the service has given up starting and is `failed`, the
-  same pass tries `recover` and starts the service again if the reset has brought the module back.
+- `recover`, from `ExecStartPre` of the service, sends `SYS ping`. No answer, and it resets the
+  chip with the line `MOD<slot> RTS`, the way `wb-cc2652p-flasher` does, and starts the firmware.
+- `watch`, from `zigbee2mqtt-watchdog.timer` every five minutes, restarts zigbee2mqtt when it has
+  sent requests and the port has received not a byte. A service that has failed is started again
+  once the reset has brought the module back.
 
-There is no limit on the number of attempts, and two of them are never closer than five minutes.
-To switch the watchdog off: `systemctl disable --now zigbee2mqtt-watchdog.timer`; an upgrade
-leaves it off.
-
-The numbers in the script are not tuned by hand, each is taken from the code it has to agree
-with and says so next to its definition:
-
-| Number | Where it comes from |
-|---|---|
-| 6 s for an answer | `timeouts.SREQ` in zigbee-herdsman, the wait behind `after 6000ms` |
-| 40 s, the longest answer | the same file, the two requests that start the network |
-| 3 requests | `start()` of the zstack adapter in zigbee-herdsman |
-| 1 s after leaving the bootloader | `skipBootloader()` in zigbee-herdsman |
-| 1 s high, 1 s low on RTS | `wb-cc2652p-flasher` |
-| 5 minutes between attempts | a choice, and within `StartLimitBurst=3` per `StartLimitInterval=400` of the service |
-
-The script writes to the journal: what went wrong as a warning, what it did about it as a notice,
-everything else at debug level. It needs python3 and the gpiod tools, which every controller has
-through wb-utils; the package does not depend on them, and without them the service starts as
-before.
-
-Not covered: WBE2R-R-ZIGBEE v.1, a CC2530 with another bootloader, answers `SYS ping` like v.2,
-but what the RTS pulse does to it has not been checked.
+The timer starts and stops with the service. To switch it off, stop it and then mask it:
+`systemctl stop zigbee2mqtt-watchdog.timer`, `systemctl mask zigbee2mqtt-watchdog.timer`; with
+`mask --now` the timer ends up failed. Where each number in the script comes from is written next
+to it. WBE2R-R-ZIGBEE v.1 has not been checked.
 
 The maintainer scripts
 ----------------------
 
-`package/after-install.sh`, `package/before-upgrade.sh`, `package/after-upgrade.sh`,
-`package/before-remove.sh` and `package/backup-z2m-data.sh` run on the controller, and fpm inlines each of them into the body of
+`package/after-install.sh`, `package/before-upgrade.sh`, `package/after-upgrade.sh` and
+`package/backup-z2m-data.sh` run on the controller, and fpm inlines each of them into the body of
 a function of the maintainer script it generates. The shebang and any `set` in such a file have no
 effect there, and a failing command does not stop the install: that is why every step in them
 reports for itself instead of relying on an exit code.

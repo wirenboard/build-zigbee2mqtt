@@ -1,11 +1,10 @@
 [Unit]
 Description=Checks that the Zigbee module answers zigbee2mqtt
+# Started by Wants= of zigbee2mqtt.service, stops with it. To switch off: stop it, then mask it
+PartOf=zigbee2mqtt.service
 
 [Timer]
 # From the end of the previous check; stays under StartLimitBurst of zigbee2mqtt.service
 OnBootSec=5min
 OnUnitInactiveSec=5min
 AccuracySec=10s
-
-[Install]
-WantedBy=timers.target

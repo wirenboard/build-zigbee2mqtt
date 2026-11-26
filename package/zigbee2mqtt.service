@@ -1,7 +1,8 @@
 [Unit]
 Description=zigbee2mqtt
 After=network.target mosquitto.service
-Wants=mosquitto.service
+# The timer checks that the Zigbee module still answers, see zigbee_module_guard.py
+Wants=mosquitto.service zigbee2mqtt-watchdog.timer
 
 [Service]
 # Resolves the serial port from the slot picked in the web interface, so a module declared
@@ -16,7 +17,9 @@ StandardOutput=inherit
 StandardError=inherit
 Restart=always
 RestartSec=90
-StartLimitInterval=400
+# Four starts with a silent Zigbee module are 161 s apart and have to fit in: then the service
+# fails and the watchdog timer makes the further attempts, one in five minutes
+StartLimitInterval=900
 StartLimitBurst=3
 User=root
 

@@ -165,8 +165,8 @@ pack_deb_with_fpm() {
     # package is purged. fpm 1.18.0 takes the flag and does nothing with it: the option handler
     # puts the path into attributes[:deb_after_purge], and nothing in fpm ever reads that attribute
     #
-    # The watchdog units are plain files: --deb-systemd would start the one-shot service too.
-    # The maintainer scripts enable and disable the timer
+    # The watchdog units are plain files, not --deb-systemd: zigbee2mqtt.service starts the timer
+    # by Wants=, and the timer stops with it by PartOf=
     fpm --input-type dir \
         --output-type deb \
         --name "${PKG_NAME}" \
@@ -189,7 +189,6 @@ pack_deb_with_fpm() {
         --before-install package/backup-z2m-data.sh \
         --before-upgrade "${before_upgrade}" \
         --after-upgrade package/after-upgrade.sh \
-        --before-remove package/before-remove.sh \
         --package "${RESULT_DIR}/result.deb" \
         "${FPM_EXTRA[@]}" \
         "${SOURCES}"=/mnt/data/root \
