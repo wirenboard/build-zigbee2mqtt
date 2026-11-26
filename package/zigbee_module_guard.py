@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Resets a Zigbee module that has stopped answering zigbee2mqtt.
 
-The Z-Stack firmware of the module hangs once in a few weeks and has no watchdog; zigbee2mqtt
-does not notice. Only for the "zstack" adapter on /dev/ttyMOD1..4.
+A WBE2R-R-ZIGBEE v.2 has been seen to go silent after weeks of work, and zigbee2mqtt does not
+notice. Only for the "zstack" adapter on /dev/ttyMOD1..4.
 
 Usage: zigbee_module_guard.py recover   before the service starts: reset the module if it is silent
        zigbee_module_guard.py watch     timer pass: restart the service if the module went silent

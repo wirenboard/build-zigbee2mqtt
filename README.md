@@ -202,10 +202,11 @@ takes effect on the next start of the service.
 A Zigbee module that stops answering
 ------------------------------------
 
-The coordinator firmware of WBE2R-R-ZIGBEE v.2, Z-Stack 3.x by Koenkk, stops answering over the
-serial port once in a few weeks and has no watchdog. zigbee2mqtt does not notice: the service
-stays active with a dead network. Upstream has no fix, see
-https://github.com/Koenkk/Z-Stack-firmware/discussions/545.
+A WBE2R-R-ZIGBEE v.2 has been seen to stop answering over the serial port after weeks of work.
+zigbee2mqtt does not notice: the service stays active with a dead network, and restarting it does
+not help, a power cycle does. The cause is not established. The module reported the coordinator
+firmware revision 20250321, Z-Stack 3.x by Koenkk; the same is reported for that firmware, which
+has no watchdog enabled: https://github.com/Koenkk/Z-Stack-firmware/discussions/545.
 
 `package/zigbee_module_guard.py` works around it for `serial.adapter: zstack` on `/dev/ttyMOD1`
 to `/dev/ttyMOD4`:
